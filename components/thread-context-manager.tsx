@@ -1,6 +1,6 @@
 "use client"
 
-import { Settings, X, MessageSquare, Hash, Eye, Search, ChevronRight, Users, FileText, Minus } from "lucide-react"
+import { Settings, X, MessageSquare, Hash, Eye, Search, ChevronRight, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +11,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 
 interface ThreadContextManagerProps {
@@ -19,7 +18,7 @@ interface ThreadContextManagerProps {
   onClose: () => void
 }
 
-type ContextMode = "all" | "unified"
+
 
 export function ThreadContextManager({ threadId, onClose }: ThreadContextManagerProps) {
   const {
@@ -36,7 +35,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
     getMainThreads,
   } = useThreads()
 
-  const [contextMode, setContextMode] = useState<ContextMode>("unified")
+
   const [showPreview, setShowPreview] = useState(false)
   const [messageSearch, setMessageSearch] = useState("")
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
@@ -174,6 +173,43 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
       } else if (isMessageInContext(messageId)) {
         excludeMessageFromThread(threadId, messageId)
       }
+    }
+  }
+
+  // Check if all available threads are selected
+  const areAllThreadsSelected = () => {
+    return availableThreads.every((thread) => 
+      currentThread.contextThreadIds.includes(thread.id) &&
+      thread.messages.every((msg) => isMessageInContext(msg.id))
+    )
+  }
+
+  // Toggle all threads selection
+  const toggleAllThreads = () => {
+    const allSelected = areAllThreadsSelected()
+    
+    if (allSelected) {
+      // Unselect all threads and their messages
+      availableThreads.forEach((thread) => {
+        removeContextThread(threadId, thread.id)
+        thread.messages.forEach((msg) => {
+          if (isMessageExplicitlyIncluded(msg.id)) {
+            removeContextMessage(threadId, msg.id)
+          } else if (isMessageInContext(msg.id)) {
+            excludeMessageFromThread(threadId, msg.id)
+          }
+        })
+      })
+    } else {
+      // Select all available threads and their messages
+      availableThreads.forEach((thread) => {
+        addContextThread(threadId, thread.id)
+        thread.messages.forEach((msg) => {
+          if (!isMessageInContext(msg.id)) {
+            addContextMessage(threadId, msg.id)
+          }
+        })
+      })
     }
   }
 
@@ -315,20 +351,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
     )
   }
 
-  // Handle context mode changes
-  const handleContextModeChange = (mode: ContextMode) => {
-    setContextMode(mode)
 
-    if (mode === "all") {
-      // Add all threads under the same root
-      const allRootThreads = getAllThreadsUnderRoot(rootThread.id)
-      allRootThreads.forEach((threadId) => {
-        if (availableThreads.some((t) => t.id === threadId)) {
-          addContextThread(threadId, threadId)
-        }
-      })
-    }
-  }
 
   if (!currentThread) return null
 
@@ -348,43 +371,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
       {/* Content */}
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
-          {/* Context Mode Selector */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Context Mode</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <RadioGroup value={contextMode} onValueChange={handleContextModeChange}>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="all" id="all" />
-                    <Label htmlFor="all" className="flex-1">
-                      <div>
-                        <p className="font-medium">All Threads</p>
-                        <p className="text-xs text-muted-foreground">
-                          Automatically includes every thread under "{rootThread.name}"
-                        </p>
-                      </div>
-                    </Label>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </div>
 
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="unified" id="unified" />
-                    <Label htmlFor="unified" className="flex-1">
-                      <div>
-                        <p className="font-medium">Unified Selection</p>
-                        <p className="text-xs text-muted-foreground">
-                          Hierarchical view with threads and messages mixed together
-                        </p>
-                      </div>
-                    </Label>
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </div>
-              </RadioGroup>
-            </CardContent>
-          </Card>
 
           {/* Current Thread */}
           <Card>
@@ -444,47 +431,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
             </Card>
           )}
 
-          {/* Context Content Based on Mode */}
-          {contextMode === "all" && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">All Threads Under Root</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <p className="text-xs text-muted-foreground mb-3">
-                  All threads under "{rootThread.name}" are automatically included in context.
-                </p>
-                <div className="space-y-2">
-                  {getAllThreadsUnderRoot(rootThread.id).map((id) => {
-                    const thread = threads[id]
-                    if (!thread) return null
-                    return (
-                      <div key={id} className="flex items-center space-x-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded">
-                        {thread.isMainThread ? (
-                          <MessageSquare className="h-4 w-4 text-primary flex-shrink-0" />
-                        ) : (
-                          <Hash className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate" title={thread.name}>
-                            {thread.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {thread.messages.filter((m) => m.role === "user").length} user messages
-                          </p>
-                        </div>
-                        <Badge variant="default" className="flex-shrink-0">
-                          Auto
-                        </Badge>
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {contextMode === "unified" && (
+          {/* Unified Thread & Message Selection */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center justify-between">
@@ -513,11 +460,20 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
                 </div>
 
                 <div className="border rounded-lg p-3 max-h-80 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b">
+                    <span className="text-sm font-medium">Threads & Messages</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleAllThreads}
+                    >
+                      {areAllThreadsSelected() ? "Unselect All" : "Select All"}
+                    </Button>
+                  </div>
                   <div className="space-y-1">{mainThreads.map((mainThread) => renderUnifiedHierarchy(mainThread))}</div>
                 </div>
               </CardContent>
             </Card>
-          )}
 
           {/* Context Summary */}
           <Card>
@@ -559,10 +515,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
             </CardHeader>
             <CardContent className="pt-0">
               <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Mode:</span>
-                  <span className="capitalize">{contextMode}</span>
-                </div>
+
                 <div className="flex justify-between">
                   <span>Total messages in context:</span>
                   <span>{contextMessages.length}</span>
@@ -571,24 +524,20 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
                   <span>User messages in context:</span>
                   <span>{contextMessages.filter((m) => m.role === "user").length}</span>
                 </div>
-                {contextMode === "unified" && (
-                  <>
-                    <div className="flex justify-between">
-                      <span>Selected threads:</span>
-                      <span>
-                        {currentThread.contextThreadIds.filter((id) => !hierarchy.some((h) => h.id === id)).length}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Selected messages:</span>
-                      <span>{currentThread.contextMessageIds.length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Excluded messages:</span>
-                      <span>{currentThread.excludedMessageIds.length}</span>
-                    </div>
-                  </>
-                )}
+                <div className="flex justify-between">
+                  <span>Selected threads:</span>
+                  <span>
+                    {currentThread.contextThreadIds.filter((id) => !hierarchy.some((h) => h.id === id)).length}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Selected messages:</span>
+                  <span>{currentThread.contextMessageIds.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Excluded messages:</span>
+                  <span>{currentThread.excludedMessageIds.length}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
