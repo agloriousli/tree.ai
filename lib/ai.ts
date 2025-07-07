@@ -1,6 +1,10 @@
 import type { Message } from "@/components/thread-provider"
 
-export async function generateResponse(contextMessages: Message[]): Promise<string> {
+export async function generateResponse(
+  contextMessages: Array<{ role: "user" | "assistant"; content: string }>, 
+  onChunk?: (chunk: string) => void,
+  showThinkingMode?: boolean
+): Promise<string> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -9,11 +13,11 @@ export async function generateResponse(contextMessages: Message[]): Promise<stri
         role,
         content,
       })),
+      showThinkingMode,
     }),
   })
 
   if (!res.ok) {
-    // Try JSON first …
     let errText = `HTTP ${res.status}`
     try {
       const j = await res.json()
@@ -24,6 +28,45 @@ export async function generateResponse(contextMessages: Message[]): Promise<stri
     throw new Error(`Chat API error: ${errText}`)
   }
 
-  const { content } = (await res.json()) as { content: string }
-  return content
+  if (!res.body) {
+    throw new Error("No response body")
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let fullContent = ""
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.content) {
+              fullContent += data.content
+              onChunk?.(data.content)
+            }
+          } catch (e) {
+            console.error("Frontend JSON parsing error:", e)
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  console.log("Response completed, length:", fullContent.length)
+  
+  if (!fullContent || fullContent.trim() === '') {
+    throw new Error("Received empty response from AI")
+  }
+  
+  return fullContent
 }

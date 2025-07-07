@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronRight, Home } from "lucide-react"
-import { useThreads } from "@/components/thread-provider"
+import { useThreads, Thread } from "@/components/thread-provider"
 import { Button } from "@/components/ui/button"
 
 interface BreadcrumbsProps {
@@ -13,11 +13,12 @@ export function Breadcrumbs({ threadId }: BreadcrumbsProps) {
 
   const getBreadcrumbPath = (threadId: string): string[] => {
     const path: string[] = []
-    let currentThread = threads[threadId]
+    let currentThread: Thread | undefined = threads[threadId]
 
     while (currentThread) {
       path.unshift(currentThread.id)
-      currentThread = currentThread.parentThreadId ? threads[currentThread.parentThreadId] : undefined
+      const parentId: string | undefined = currentThread.parentThreadId
+      currentThread = parentId ? threads[parentId] : undefined
     }
 
     return path

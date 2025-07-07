@@ -201,7 +201,7 @@ export function ChatInterface({ threadId, showContextPanel, onToggleContext, onT
 
       {/* Right Sidebar - Thread Context Manager */}
       {showContextPanel && (
-        <div className="flex-shrink-0 max-w-[28rem] min-w-[20rem]">
+        <div className="flex-shrink-0">
           <ThreadContextManager threadId={threadId} onClose={onToggleContext} />
         </div>
       )}

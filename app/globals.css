@@ -192,3 +192,46 @@ body {
 .dark .prose pre {
   background-color: hsl(var(--muted));
 }
+
+/* Text selection enhancement for thread creation */
+.selection-active ::selection {
+  background-color: hsl(var(--primary) / 0.3);
+  color: inherit;
+}
+
+.selection-active ::-moz-selection {
+  background-color: hsl(var(--primary) / 0.3);
+  color: inherit;
+}
+
+/* Enhanced selection styling when menu is active */
+.selection-active {
+  position: relative;
+}
+
+.selection-active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 49%, hsl(var(--primary) / 0.05) 50%, transparent 51%);
+  background-size: 20px 20px;
+  animation: selection-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes selection-pulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/*
+dyk how when you double click a text the word gets highlighted and when you triple click the entire text block gets highlighted? i know that on sites like medium when you double or triple click to select a pop up bar comes up with options to highlight/share the text right? explain how that works for me
+*/

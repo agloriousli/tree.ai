@@ -2,6 +2,7 @@
 
 import { MessageSquare, Hash, Users, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { formatTime } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { useThreads, type Thread } from "@/components/thread-provider"
 
@@ -54,10 +55,7 @@ export function InlineThreadPreview({ thread, isActive, onSelect }: InlineThread
 
           {lastMessage && (
             <p className="text-xs text-muted-foreground mt-1">
-              {lastMessage.timestamp.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {formatTime(lastMessage.timestamp)}
             </p>
           )}
         </div>

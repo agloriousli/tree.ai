@@ -1,7 +1,9 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useCallback } from "react"
+import { createContext, useContext, useState, useCallback, useEffect } from "react"
+import { generateId } from "@/lib/utils"
+import { storageManager } from "@/lib/storage"
 
 export interface Message {
   id: string
@@ -21,9 +23,9 @@ export interface Thread {
   parentThreadId?: string
   rootMessageId?: string
   messages: Message[]
-  contextThreadIds: string[] // Other threads to include
-  contextMessageIds: string[] // Specific messages to include (from any thread)
-  excludedMessageIds: string[] // Messages to exclude from this thread's context
+  contextThreadIds: string[]
+  contextMessageIds: string[]
+  excludedMessageIds: string[]
   level: number
   isVisible?: boolean
   isMainThread?: boolean
@@ -35,11 +37,18 @@ interface ThreadContextType {
   messages: Record<string, Message>
   showInlineForks: boolean
   setShowInlineForks: (show: boolean) => void
+  showThinkingMode: boolean
+  setShowThinkingMode: (show: boolean) => void
+  maxContextMessages: number | null
+  setMaxContextMessages: (max: number | null) => void
+
   createThread: (name: string, parentThreadId?: string, rootMessageId?: string, isMainThread?: boolean) => string
   createMainThread: (name: string, description?: string) => string
   addMessage: (threadId: string, content: string, role: "user" | "assistant") => string
   editMessage: (messageId: string, newContent: string) => void
   deleteMessage: (messageId: string) => void
+  deleteThread: (threadId: string) => void
+  updateThread: (threadId: string, updates: Partial<Pick<Thread, 'name' | 'description' | 'isVisible'>>) => void
   forkMessage: (messageId: string, threadName?: string) => string
   addContextThread: (threadId: string, contextThreadId: string) => void
   removeContextThread: (threadId: string, contextThreadId: string) => void
@@ -53,222 +62,70 @@ interface ThreadContextType {
   getMainThreads: () => Thread[]
   getThreadHierarchy: (threadId: string) => Thread[]
   getAllMessages: () => Message[]
+  exportData: () => string
+  importData: (jsonData: string) => void
+  downloadBackup: () => void
+  uploadBackup: (file: File) => Promise<void>
+  clearAllData: () => void
+  getStorageInfo: () => { size: string; lastSaved: string | null; itemCount: number }
 }
 
 const ThreadContext = createContext<ThreadContextType | null>(null)
 
-// Default data for testing
-const createDefaultData = () => {
-  const now = new Date()
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
-  const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000)
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
 
-  const defaultMessages: Record<string, Message> = {
-    "msg-1": {
-      id: "msg-1",
-      content:
-        "Hello! I'm working on a React project and need help with state management. What are the best practices?",
-      role: "user",
-      timestamp: threeDaysAgo,
-      threadId: "main",
-      forkIds: ["thread-react-advanced"],
-    },
-    "msg-2": {
-      id: "msg-2",
-      content:
-        "Great question! For React state management, here are the key best practices:\n\n1. **Start with built-in state** - Use useState and useReducer for local component state\n2. **Lift state up** when multiple components need the same data\n3. **Consider Context API** for app-wide state that doesn't change often\n4. **Use external libraries** like Redux, Zustand, or Jotai for complex state\n\nWhat specific challenges are you facing with your current setup?",
-      role: "assistant",
-      timestamp: threeDaysAgo,
-      threadId: "main",
-    },
-    "msg-3": {
-      id: "msg-3",
-      content:
-        "I'm building a dashboard with multiple components that need to share user data and preferences. Should I use Context or Redux?",
-      role: "user",
-      timestamp: threeDaysAgo,
-      threadId: "main",
-      forkIds: ["thread-dashboard"],
-    },
-    "msg-4": {
-      id: "msg-4",
-      content:
-        "For a dashboard with user data and preferences, I'd recommend starting with **Context API** since it's built into React and perfect for this use case:\n\n```jsx\nconst UserContext = createContext()\n\nfunction UserProvider({ children }) {\n  const [user, setUser] = useState(null)\n  const [preferences, setPreferences] = useState({})\n  \n  return (\n    <UserContext.Provider value={{ user, setUser, preferences, setPreferences }}>\n      {children}\n    </UserContext.Provider>\n  )\n}\n```\n\nOnly consider Redux if you need time-travel debugging, complex async logic, or have a very large team.",
-      role: "assistant",
-      timestamp: threeDaysAgo,
-      threadId: "main",
-    },
-    "msg-5": {
-      id: "msg-5",
-      content: "What about performance? I've heard Context can cause unnecessary re-renders.",
-      role: "user",
-      timestamp: twoHoursAgo,
-      threadId: "main",
-    },
-    "msg-6": {
-      id: "msg-6",
-      content:
-        "You're absolutely right to be concerned about performance! Here are strategies to optimize Context:\n\n1. **Split contexts** - Separate frequently changing data from static data\n2. **Use useMemo** for context values\n3. **Implement custom hooks** to access only needed parts\n4. **Consider state colocation** - keep state close to where it's used\n\nFor your dashboard, you might have:\n- `UserContext` (rarely changes)\n- `PreferencesContext` (changes occasionally)\n- `DashboardDataContext` (changes frequently)",
-      role: "assistant",
-      timestamp: twoHoursAgo,
-      threadId: "main",
-    },
-
-    // React Advanced Thread
-    "msg-7": {
-      id: "msg-7",
-      content: "Let's dive deeper into advanced React patterns. What about custom hooks for complex state logic?",
-      role: "user",
-      timestamp: twoHoursAgo,
-      threadId: "thread-react-advanced",
-    },
-    "msg-8": {
-      id: "msg-8",
-      content:
-        "Excellent question! Custom hooks are perfect for encapsulating complex state logic. Here's a powerful pattern:\n\n```jsx\nfunction useAsyncState(initialState) {\n  const [state, setState] = useState({\n    data: initialState,\n    loading: false,\n    error: null\n  })\n\n  const execute = useCallback(async (asyncFunction) => {\n    setState(prev => ({ ...prev, loading: true, error: null }))\n    try {\n      const data = await asyncFunction()\n      setState({ data, loading: false, error: null })\n    } catch (error) {\n      setState(prev => ({ ...prev, loading: false, error }))\n    }\n  }, [])\n\n  return [state, execute]\n}\n```\n\nThis pattern handles loading states, errors, and data in a reusable way!",
-      role: "assistant",
-      timestamp: twoHoursAgo,
-      threadId: "thread-react-advanced",
-    },
-
-    // Dashboard Thread
-    "msg-9": {
-      id: "msg-9",
-      content: "For the dashboard specifically, how should I structure the component hierarchy?",
-      role: "user",
-      timestamp: oneHourAgo,
-      threadId: "thread-dashboard",
-    },
-    "msg-10": {
-      id: "msg-10",
-      content:
-        "Great question! Here's a solid dashboard structure:\n\n```\nDashboard/\n├── Layout/\n│   ├── Header (user info, notifications)\n│   ├── Sidebar (navigation)\n│   └── Main (content area)\n├── Widgets/\n│   ├── Chart\n│   ├── Table\n│   ├── KPI\n│   └── Activity\n└── Providers/\n    ├── UserProvider\n    ├── ThemeProvider\n    └── DataProvider\n```\n\nKey principles:\n- **Container/Presentational** pattern\n- **Compound components** for complex widgets\n- **Render props** for data fetching\n- **Error boundaries** for resilience",
-      role: "assistant",
-      timestamp: oneHourAgo,
-      threadId: "thread-dashboard",
-    },
-
-    // Python Thread
-    "msg-11": {
-      id: "msg-11",
-      content:
-        "I'm also working on a Python backend for this dashboard. What's the best way to structure a FastAPI project?",
-      role: "user",
-      timestamp: oneHourAgo,
-      threadId: "thread-python",
-    },
-    "msg-12": {
-      id: "msg-12",
-      content:
-        "FastAPI is an excellent choice! Here's a production-ready structure:\n\n```\napp/\n├── main.py              # FastAPI app instance\n├── config.py            # Settings and configuration\n├── dependencies.py      # Dependency injection\n├── database.py          # Database connection\n├── models/              # SQLAlchemy models\n├── schemas/             # Pydantic schemas\n├── crud/                # Database operations\n├── api/\n│   ├── __init__.py\n│   ├── deps.py          # API dependencies\n│   └── v1/\n│       ├── __init__.py\n│       ├── endpoints/\n│       └── api.py\n└── core/\n    ├── security.py      # Authentication\n    └── utils.py\n```\n\nKey benefits:\n- **Clear separation** of concerns\n- **Easy testing** with dependency injection\n- **Scalable** API versioning\n- **Type safety** with Pydantic",
-      role: "assistant",
-      timestamp: oneHourAgo,
-      threadId: "thread-python",
-    },
-
-    // Design Thread
-    "msg-13": {
-      id: "msg-13",
-      content: "What about the UI/UX design principles for dashboards? Any recommendations?",
-      role: "user",
-      timestamp: now,
-      threadId: "thread-design",
-    },
-    "msg-14": {
-      id: "msg-14",
-      content:
-        "Here are key dashboard design principles:\n\n**Visual Hierarchy:**\n- Most important metrics at the top-left\n- Use size, color, and spacing to guide attention\n- Group related information together\n\n**Data Visualization:**\n- Choose the right chart type for your data\n- Use consistent color schemes\n- Avoid chart junk and unnecessary decorations\n\n**User Experience:**\n- Progressive disclosure (show details on demand)\n- Responsive design for all screen sizes\n- Fast loading with skeleton screens\n- Clear error states and empty states\n\n**Accessibility:**\n- High contrast ratios\n- Keyboard navigation\n- Screen reader support\n- Alternative text for charts",
-      role: "assistant",
-      timestamp: now,
-      threadId: "thread-design",
-    },
-  }
-
-  const defaultThreads: Record<string, Thread> = {
-    main: {
-      id: "main",
-      name: "React Development Help",
-      messages: [
-        defaultMessages["msg-1"],
-        defaultMessages["msg-2"],
-        defaultMessages["msg-3"],
-        defaultMessages["msg-4"],
-        defaultMessages["msg-5"],
-        defaultMessages["msg-6"],
-      ],
-      contextThreadIds: [],
-      contextMessageIds: [],
-      excludedMessageIds: [],
-      level: 0,
-      isVisible: true,
-      isMainThread: true,
-      description: "Getting help with React state management and best practices",
-    },
-    "thread-react-advanced": {
-      id: "thread-react-advanced",
-      name: "Advanced React Patterns",
-      parentThreadId: "main",
-      rootMessageId: "msg-1",
-      messages: [defaultMessages["msg-7"], defaultMessages["msg-8"]],
-      contextThreadIds: ["main"],
-      contextMessageIds: [],
-      excludedMessageIds: [],
-      level: 1,
-      isVisible: true,
-      isMainThread: false,
-    },
-    "thread-dashboard": {
-      id: "thread-dashboard",
-      name: "Dashboard Architecture",
-      parentThreadId: "main",
-      rootMessageId: "msg-3",
-      messages: [defaultMessages["msg-9"], defaultMessages["msg-10"]],
-      contextThreadIds: ["main"],
-      contextMessageIds: [],
-      excludedMessageIds: [],
-      level: 1,
-      isVisible: true,
-      isMainThread: false,
-    },
-    "thread-python": {
-      id: "thread-python",
-      name: "Python Backend Development",
-      messages: [defaultMessages["msg-11"], defaultMessages["msg-12"]],
-      contextThreadIds: [],
-      contextMessageIds: ["msg-3", "msg-4"], // Include some context from React thread
-      excludedMessageIds: [],
-      level: 0,
-      isVisible: true,
-      isMainThread: true,
-      description: "FastAPI backend development for the dashboard project",
-    },
-    "thread-design": {
-      id: "thread-design",
-      name: "UI/UX Design Principles",
-      messages: [defaultMessages["msg-13"], defaultMessages["msg-14"]],
-      contextThreadIds: ["thread-dashboard"], // Include dashboard context
-      contextMessageIds: [],
-      excludedMessageIds: [],
-      level: 0,
-      isVisible: true,
-      isMainThread: true,
-      description: "Design principles and best practices for dashboard interfaces",
-    },
-  }
-
-  return { defaultThreads, defaultMessages }
-}
 
 export function ThreadProvider({ children }: { children: React.ReactNode }) {
-  const { defaultThreads, defaultMessages } = createDefaultData()
-  const [threads, setThreads] = useState<Record<string, Thread>>(defaultThreads)
-  const [messages, setMessages] = useState<Record<string, Message>>(defaultMessages)
+  const [threads, setThreads] = useState<Record<string, Thread>>({})
+  const [messages, setMessages] = useState<Record<string, Message>>({})
   const [showInlineForks, setShowInlineForks] = useState(true)
+  const [showThinkingMode, setShowThinkingMode] = useState(false)
+  const [maxContextMessages, setMaxContextMessages] = useState<number | null>(15)
+
+
+  // Auto-save data whenever it changes
+  useEffect(() => {
+    if (Object.keys(threads).length > 0) {
+      storageManager.saveData(threads, messages, {
+        showInlineForks,
+        showThinkingMode,
+        maxContextMessages,
+      })
+    }
+  }, [threads, messages, showInlineForks, showThinkingMode, maxContextMessages])
+
+  // Load data from storage on startup
+  useEffect(() => {
+    const savedData = storageManager.loadData()
+    if (savedData) {
+      setThreads(savedData.threads)
+      setMessages(savedData.messages)
+      setShowInlineForks(savedData.settings.showInlineForks)
+      setShowThinkingMode(savedData.settings.showThinkingMode)
+      setMaxContextMessages(savedData.settings.maxContextMessages)
+      console.log('Data loaded from storage')
+    } else {
+      // Create default thread if no saved data
+      const threadId = generateId('thread')
+      const untitledThread: Thread = {
+        id: threadId,
+        name: "Untitled Thread",
+        messages: [],
+        contextThreadIds: [],
+        contextMessageIds: [],
+        excludedMessageIds: [],
+        level: 0,
+        isVisible: true,
+        isMainThread: true,
+      }
+      
+      setThreads({ [threadId]: untitledThread })
+      console.log('Created default thread')
+    }
+  }, [])
 
   const createThread = useCallback(
     (name: string, parentThreadId?: string, rootMessageId?: string, isMainThread = false): string => {
-      const threadId = `thread-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const threadId = generateId('thread')
       const parentLevel = parentThreadId ? threads[parentThreadId]?.level || 0 : 0
 
       const newThread: Thread = {
@@ -313,7 +170,7 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
   )
 
   const addMessage = useCallback((threadId: string, content: string, role: "user" | "assistant"): string => {
-    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const messageId = generateId('msg')
 
     const newMessage: Message = {
       id: messageId,
@@ -356,7 +213,6 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
-    // Update in thread messages array
     setThreads((prev) => {
       const updatedThreads = { ...prev }
       Object.keys(updatedThreads).forEach((threadId) => {
@@ -387,14 +243,12 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       const message = messages[messageId]
       if (!message) return
 
-      // Remove from messages
       setMessages((prev) => {
         const newMessages = { ...prev }
         delete newMessages[messageId]
         return newMessages
       })
 
-      // Remove from thread
       setThreads((prev) => ({
         ...prev,
         [message.threadId]: {
@@ -406,6 +260,69 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
     [messages],
   )
 
+  const updateThread = useCallback(
+    (threadId: string, updates: Partial<Pick<Thread, 'name' | 'description' | 'isVisible'>>) => {
+      const thread = threads[threadId]
+      if (!thread) return
+
+      setThreads((prev) => ({
+        ...prev,
+        [threadId]: {
+          ...prev[threadId],
+          ...updates,
+        },
+      }))
+    },
+    [threads],
+  )
+
+  const deleteThread = useCallback(
+    (threadId: string) => {
+      const thread = threads[threadId]
+      if (!thread) return
+
+      if (threadId === "main") {
+        console.warn("Cannot delete the main thread")
+        return
+      }
+
+      thread.messages.forEach((message) => {
+        setMessages((prev) => {
+          const newMessages = { ...prev }
+          delete newMessages[message.id]
+          return newMessages
+        })
+      })
+
+      const childThreadIds = Object.values(threads)
+        .filter((t): t is Thread => t.parentThreadId === threadId)
+        .map((t) => t.id)
+
+      childThreadIds.forEach((childId) => {
+        const childThread = threads[childId]
+        if (childThread) {
+          childThread.messages.forEach((message) => {
+            setMessages((prev) => {
+              const newMessages = { ...prev }
+              delete newMessages[message.id]
+              return newMessages
+            })
+          })
+        }
+      })
+
+      setThreads((prev) => {
+        const newThreads = { ...prev }
+        delete newThreads[threadId]
+        childThreadIds.forEach((childId) => {
+          delete newThreads[childId]
+        })
+        return newThreads
+      })
+    },
+    [threads],
+  )
+
   const forkMessage = useCallback(
     (messageId: string, threadName?: string): string => {
       const message = messages[messageId]
@@ -414,7 +331,6 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       const defaultName = threadName || `Fork: ${message.content.slice(0, 30)}...`
       const newThreadId = createThread(defaultName, message.threadId, messageId)
 
-      // Update the original message to track this fork
       setMessages((prev) => ({
         ...prev,
         [messageId]: {
@@ -454,7 +370,7 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       [threadId]: {
         ...prev[threadId],
         contextMessageIds: [...prev[threadId].contextMessageIds.filter((id) => id !== messageId), messageId],
-        excludedMessageIds: prev[threadId].excludedMessageIds.filter((id) => id !== messageId), // Remove from excluded if adding
+        excludedMessageIds: prev[threadId].excludedMessageIds.filter((id) => id !== messageId),
       },
     }))
   }, [])
@@ -475,7 +391,7 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       [threadId]: {
         ...prev[threadId],
         excludedMessageIds: [...prev[threadId].excludedMessageIds.filter((id) => id !== messageId), messageId],
-        contextMessageIds: prev[threadId].contextMessageIds.filter((id) => id !== messageId), // Remove from included if excluding
+        contextMessageIds: prev[threadId].contextMessageIds.filter((id) => id !== messageId),
       },
     }))
   }, [])
@@ -493,11 +409,12 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
   const getThreadHierarchy = useCallback(
     (threadId: string): Thread[] => {
       const hierarchy: Thread[] = []
-      let currentThread = threads[threadId]
+      let currentThread: Thread | undefined = threads[threadId]
 
       while (currentThread) {
         hierarchy.unshift(currentThread)
-        currentThread = currentThread.parentThreadId ? threads[currentThread.parentThreadId] : undefined
+        const parentId: string | undefined = currentThread.parentThreadId
+        currentThread = parentId ? threads[parentId] : undefined
       }
 
       return hierarchy
@@ -547,9 +464,84 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
         (msg, index, arr) => arr.findIndex((m) => m.id === msg.id) === index,
       )
 
-      return uniqueMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+      const sortedMessages = uniqueMessages.sort((a, b) => {
+        // Ensure timestamps are Date objects and handle invalid dates
+        const timestampA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp)
+        const timestampB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp)
+        
+        // Handle invalid dates by using current time
+        const timeA = isNaN(timestampA.getTime()) ? Date.now() : timestampA.getTime()
+        const timeB = isNaN(timestampB.getTime()) ? Date.now() : timestampB.getTime()
+        
+        return timeA - timeB
+      })
+      
+      // 6. Smart context limiting that prioritizes user selections
+      if (maxContextMessages && sortedMessages.length > maxContextMessages) {
+        console.log(`Context too long (${sortedMessages.length} messages), applying smart limiting`)
+      
+        const currentThreadMessages = thread.messages
+        const explicitContextMessages = thread.contextMessageIds
+          .map(id => messages[id])
+          .filter(msg => msg && sortedMessages.some(m => m.id === msg.id))
+        
+        // Start with current thread messages
+        const prioritizedMessages: Message[] = [...currentThreadMessages]
+        
+        // Add explicitly selected context messages
+        explicitContextMessages.forEach(msg => {
+          if (!prioritizedMessages.some(m => m.id === msg.id)) {
+            prioritizedMessages.push(msg)
+          }
+        })
+        
+        // If we still have room, add parent hierarchy messages (most recent first)
+        const parentMessages = sortedMessages.filter(msg => 
+          !prioritizedMessages.some(m => m.id === msg.id) &&
+          hierarchy.slice(0, -1).some(parent => parent.messages.some(pm => pm.id === msg.id))
+        )
+        
+        prioritizedMessages.push(...parentMessages.slice(-(maxContextMessages - prioritizedMessages.length)))
+        
+        // If we still have room, add additional context thread messages
+        let additionalContextMessages: Message[] = []
+        if (prioritizedMessages.length < maxContextMessages) {
+          additionalContextMessages = sortedMessages.filter(msg => 
+            !prioritizedMessages.some(m => m.id === msg.id) &&
+            thread.contextThreadIds.some(contextThreadId => {
+              const contextThread = threads[contextThreadId]
+              return contextThread && contextThread.messages.some(cm => cm.id === msg.id)
+            })
+          )
+          
+          prioritizedMessages.push(...additionalContextMessages.slice(-(maxContextMessages - prioritizedMessages.length)))
+        }
+        
+        // Sort by timestamp to maintain conversation flow
+        const finalMessages = prioritizedMessages.sort((a, b) => {
+          // Ensure timestamps are Date objects and handle invalid dates
+          const timestampA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp)
+          const timestampB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp)
+          
+          // Handle invalid dates by using current time
+          const timeA = isNaN(timestampA.getTime()) ? Date.now() : timestampA.getTime()
+          const timeB = isNaN(timestampB.getTime()) ? Date.now() : timestampB.getTime()
+          
+          return timeA - timeB
+        })
+        
+        console.log(`Smart context limiting applied: ${finalMessages.length} messages`)
+        console.log(`- Current thread: ${currentThreadMessages.length} messages`)
+        console.log(`- Explicit context: ${explicitContextMessages.length} messages`)
+        console.log(`- Parent hierarchy: ${parentMessages.length} messages`)
+        console.log(`- Additional context: ${additionalContextMessages.length} messages`)
+        
+        return finalMessages
+      }
+      
+      return sortedMessages
     },
-    [threads, getThreadHierarchy, messages],
+    [threads, getThreadHierarchy, messages, maxContextMessages],
   )
 
   const getMessageForks = useCallback(
@@ -557,7 +549,7 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       const message = messages[messageId]
       if (!message || !message.forkIds) return []
 
-      return message.forkIds.map((forkId) => threads[forkId]).filter(Boolean)
+      return message.forkIds.map((forkId) => threads[forkId]).filter((thread): thread is Thread => thread !== undefined)
     },
     [messages, threads],
   )
@@ -580,6 +572,45 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
     return Object.values(messages)
   }, [messages])
 
+  const exportData = useCallback((): string => {
+    return storageManager.exportData()
+  }, [])
+
+  const importData = useCallback((jsonData: string): void => {
+    const importedData = storageManager.importData(jsonData)
+    setThreads(importedData.threads)
+    setMessages(importedData.messages)
+    setShowInlineForks(importedData.settings.showInlineForks)
+    setShowThinkingMode(importedData.settings.showThinkingMode)
+    setMaxContextMessages(importedData.settings.maxContextMessages)
+  }, [])
+
+  const downloadBackup = useCallback((): void => {
+    storageManager.downloadBackup()
+  }, [])
+
+  const uploadBackup = useCallback(async (file: File): Promise<void> => {
+    const importedData = await storageManager.uploadBackup(file)
+    setThreads(importedData.threads)
+    setMessages(importedData.messages)
+    setShowInlineForks(importedData.settings.showInlineForks)
+    setShowThinkingMode(importedData.settings.showThinkingMode)
+    setMaxContextMessages(importedData.settings.maxContextMessages)
+  }, [])
+
+  const clearAllData = useCallback((): void => {
+    storageManager.clearData()
+    setThreads({})
+    setMessages({})
+    setShowInlineForks(true)
+    setShowThinkingMode(false)
+    setMaxContextMessages(15)
+  }, [])
+
+  const getStorageInfo = useCallback((): { size: string; lastSaved: string | null; itemCount: number } => {
+    return storageManager.getStorageInfo()
+  }, [])
+
   return (
     <ThreadContext.Provider
       value={{
@@ -587,11 +618,18 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
         messages,
         showInlineForks,
         setShowInlineForks,
+        showThinkingMode,
+        setShowThinkingMode,
+        maxContextMessages,
+        setMaxContextMessages,
+
         createThread,
         createMainThread,
         addMessage,
         editMessage,
         deleteMessage,
+        deleteThread,
+        updateThread,
         forkMessage,
         addContextThread,
         removeContextThread,
@@ -605,6 +643,12 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
         getMainThreads,
         getThreadHierarchy,
         getAllMessages,
+        exportData,
+        importData,
+        downloadBackup,
+        uploadBackup,
+        clearAllData,
+        getStorageInfo,
       }}
     >
       {children}

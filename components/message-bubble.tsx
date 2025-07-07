@@ -5,12 +5,19 @@ import type React from "react"
 import { GitBranch, User, Bot, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useThreads, type Message } from "@/components/thread-provider"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { InlineThreadPreview } from "@/components/inline-thread-preview"
 import { MessageActionsMenu } from "@/components/message-actions-menu"
+
 import { Textarea } from "@/components/ui/textarea"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import { formatTime } from "@/lib/utils"
+import { MathJaxRenderer } from "@/components/mathjax-renderer"
+
+// Component to render markdown with LaTeX support using MathJax
+function MathRenderer({ content }: { content: string }) {
+  // Always use MathJaxRenderer for all content (handles both markdown and math)
+  return <MathJaxRenderer content={content} />
+}
 
 interface MessageBubbleProps {
   message: Message
@@ -59,6 +66,8 @@ export function MessageBubble({ message, showAvatar = true, currentThreadId, onT
     }
   }
 
+  
+
   return (
     <div className="space-y-2">
       {/* Main Message */}
@@ -85,7 +94,9 @@ export function MessageBubble({ message, showAvatar = true, currentThreadId, onT
                   isUser
                     ? "bg-primary text-primary-foreground"
                     : "bg-background border-border hover:bg-muted/50 transition-colors"
-                } ${isExcludedFromContext ? "opacity-60 border-dashed" : ""}`}
+                } ${isExcludedFromContext ? "opacity-60 border-dashed" : ""} select-text`}
+                data-message-bubble
+                data-message-id={message.id}
               >
                 {isEditing ? (
                   <div className="space-y-2">
@@ -108,54 +119,7 @@ export function MessageBubble({ message, showAvatar = true, currentThreadId, onT
                 ) : (
                   <>
                     <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:p-0">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          // Custom components for better styling
-                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                          code: ({ inline, children, ...props }) => {
-                            if (inline) {
-                              return (
-                                <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono" {...props}>
-                                  {children}
-                                </code>
-                              )
-                            }
-                            return (
-                              <pre className="bg-muted p-3 rounded-lg overflow-x-auto">
-                                <code className="text-sm font-mono" {...props}>
-                                  {children}
-                                </code>
-                              </pre>
-                            )
-                          },
-                          ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                          li: ({ children }) => <li className="text-sm">{children}</li>,
-                          blockquote: ({ children }) => (
-                            <blockquote className="border-l-4 border-muted-foreground/20 pl-4 italic text-muted-foreground">
-                              {children}
-                            </blockquote>
-                          ),
-                          h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                          h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                          h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                          em: ({ children }) => <em className="italic">{children}</em>,
-                          a: ({ children, href }) => (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-500 hover:text-blue-600 underline"
-                            >
-                              {children}
-                            </a>
-                          ),
-                        }}
-                      >
-                        {message.content}
-                      </ReactMarkdown>
+                      <MathRenderer content={message.content} />
                     </div>
                     {message.isEdited && (
                       <span className="text-xs text-muted-foreground mt-1 block opacity-70">(edited)</span>
@@ -172,7 +136,7 @@ export function MessageBubble({ message, showAvatar = true, currentThreadId, onT
               {/* Message Actions */}
               <div className="flex items-center mt-2 space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="text-xs text-muted-foreground">
-                  {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {formatTime(message.timestamp)}
                 </span>
 
                 {hasForks && showInlineForks && (
@@ -185,6 +149,13 @@ export function MessageBubble({ message, showAvatar = true, currentThreadId, onT
                     {showForks ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
                     {showForks ? "Hide" : "Show"} Threads ({forks.length})
                   </Button>
+                )}
+
+                {/* Context indicator - show when there are other threads available */}
+                {Object.values(threads).filter(t => t.id !== currentThreadId).length > 0 && (
+                  <span className="text-xs text-muted-foreground px-2 py-1 bg-muted/50 rounded">
+                    Context available
+                  </span>
                 )}
 
                 <MessageActionsMenu
@@ -226,6 +197,8 @@ export function MessageBubble({ message, showAvatar = true, currentThreadId, onT
           </div>
         </div>
       )}
+
+
     </div>
   )
 }

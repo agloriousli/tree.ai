@@ -43,6 +43,11 @@ export function MessageActionsMenu({ message, currentThreadId, onEdit, onReply, 
   const currentThread = threads[currentThreadId]
   const mainThreads = getMainThreads()
   const otherThreads = Object.values(threads).filter((t) => t.id !== currentThreadId)
+  
+  // Debug: Log available threads for context
+  console.log(`MessageActionsMenu for thread ${currentThreadId}:`)
+  console.log(`- Current thread: ${currentThread?.name}`)
+  console.log(`- Available threads for context:`, otherThreads.map(t => ({ id: t.id, name: t.name })))
 
   const isMessageInCurrentThreadContext = () => {
     return !currentThread?.excludedMessageIds.includes(message.id)
@@ -132,18 +137,25 @@ export function MessageActionsMenu({ message, currentThreadId, onEdit, onReply, 
             <DropdownMenuSubTrigger>
               <Plus className="h-4 w-4 mr-2" />
               Add to Thread Context
+              {otherThreads.length === 0 && " (No other threads)"}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              {otherThreads.map((thread) => (
-                <DropdownMenuItem
-                  key={thread.id}
-                  onClick={() => handleAddToThread(thread.id)}
-                  disabled={isMessageExplicitlyIncluded(thread.id)}
-                >
-                  {thread.name}
-                  {isMessageExplicitlyIncluded(thread.id) && " ✓"}
+              {otherThreads.length === 0 ? (
+                <DropdownMenuItem disabled>
+                  No other threads available
                 </DropdownMenuItem>
-              ))}
+              ) : (
+                otherThreads.map((thread) => (
+                  <DropdownMenuItem
+                    key={thread.id}
+                    onClick={() => handleAddToThread(thread.id)}
+                    disabled={isMessageExplicitlyIncluded(thread.id)}
+                  >
+                    {thread.name}
+                    {isMessageExplicitlyIncluded(thread.id) && " ✓"}
+                  </DropdownMenuItem>
+                ))
+              )}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
 
@@ -190,13 +202,11 @@ export function MessageActionsMenu({ message, currentThreadId, onEdit, onReply, 
             Report
           </DropdownMenuItem>
 
-          {/* Delete - Only for user messages */}
-          {isUserMessage && (
-            <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Message
-            </DropdownMenuItem>
-          )}
+          {/* Delete - Allow deletion of all messages */}
+          <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete Message
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
