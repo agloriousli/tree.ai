@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useThreadHierarchy } from "@/components/hooks/use-thread-hierarchy"
 
 interface ContextPanelProps {
   threadId: string
@@ -23,6 +24,7 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
   const [width, setWidth] = useState(384) // Default width (w-96 = 384px)
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<HTMLDivElement>(null)
+  const { getParentThread } = useThreadHierarchy()
 
   const currentThread = threads[threadId]
   const availableThreads = Object.values(threads).filter(
@@ -141,8 +143,8 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
               <CardContent className="pt-0">
                 <div className="flex items-center space-x-2 min-w-0">
                   <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <span className="text-sm truncate min-w-0 flex-1">{threads[currentThread.parentThreadId]?.name}</span>
-                  <Badge variant="secondary" className="flex-shrink-0">{threads[currentThread.parentThreadId]?.messages.length || 0}</Badge>
+                  <span className="text-sm truncate min-w-0 flex-1">{getParentThread(currentThread.id)?.name}</span>
+                  <Badge variant="secondary" className="flex-shrink-0">{getParentThread(currentThread.id)?.messages.length || 0}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Inherited from parent thread</p>
               </CardContent>
@@ -255,7 +257,7 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
                                       </div>
                                       <p className="text-sm font-medium break-words">{thread.name}</p>
                                       <p className="text-xs text-muted-foreground truncate">
-                                        Parent: {threads[thread.parentThreadId!]?.name}
+                                        Parent: {getParentThread(thread.id)?.name}
                                       </p>
                                     </div>
                                   ))}

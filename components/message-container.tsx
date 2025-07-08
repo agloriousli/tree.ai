@@ -47,7 +47,7 @@ export function MessageContainer({
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="text-center">
           <p className="text-muted-foreground text-lg">Thread not found</p>
-          <p className="text-sm text-muted-foreground mt-2">The selected thread may have been deleted or moved.</p>
+          <p className="text-sm text-muted-foreground mt-2">The selected thread may have been deleted or moved. Please select another thread or create a new thread.</p>
         </div>
       </div>
     )

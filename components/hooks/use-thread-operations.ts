@@ -2,7 +2,7 @@
  * Custom hook for managing thread creation and editing operations.
  * 
  * This hook handles:
- * - Thread creation (main threads and subthreads)
+ * - Thread creation form state management (main threads and subthreads)
  * - Thread editing (name and description updates)
  * - Dialog state management for create/edit forms
  * - Form validation and submission
@@ -16,7 +16,7 @@ import { useThreadCreation } from "@/components/hooks/use-thread-creation"
 export function useThreadOperations(
   updateThread: (threadId: string, updates: any) => void
 ) {
-  const { createMainThread, createSubthread } = useThreadCreation()
+  const { createThread } = useThreadCreation()
   const [showNewThreadDialog, setShowNewThreadDialog] = useState(false)
   const [showEditThreadDialog, setShowEditThreadDialog] = useState(false)
   const [newThreadName, setNewThreadName] = useState("Untitled Thread")
@@ -27,32 +27,40 @@ export function useThreadOperations(
   const [editThreadDescription, setEditThreadDescription] = useState("")
   const [pendingNewThreadId, setPendingNewThreadId] = useState<string | null>(null)
 
-  const handleCreateNewThread = useCallback(() => {
+  const handleSubmitCreateThreadForm = useCallback(() => {
     // Use "Untitled Thread" as default name if empty
     const threadName = newThreadName.trim() || "Untitled Thread"
 
-    let newThreadId: string
+    let newThreadId: string | null
 
     if (newThreadType === "main") {
-      newThreadId = createMainThread(threadName, newThreadDescription)
+      newThreadId = createThread({
+        type: 'main',
+        name: threadName || 'Untitled Thread',
+        description: newThreadDescription
+      })
     } else {
-      newThreadId = createSubthread({
-        name: threadName,
+      newThreadId = createThread({
+        type: 'sub',
+        name: threadName || 'Untitled Thread',
         description: newThreadDescription,
-        parentThreadId: parentThreadId || ""
+        parentThreadId: parentThreadId || undefined
       })
     }
 
-    // Reset form
-    setNewThreadName("")
-    setNewThreadDescription("")
-    setNewThreadType("main")
-    setParentThreadId("")
-    setShowNewThreadDialog(false)
+    // Only proceed if thread was created successfully
+    if (newThreadId) {
+      // Reset form
+      setNewThreadName("")
+      setNewThreadDescription("")
+      setNewThreadType("main")
+      setParentThreadId("")
+      setShowNewThreadDialog(false)
 
-    // Set the pending thread ID - the parent component will handle opening it
-    setPendingNewThreadId(newThreadId)
-  }, [newThreadName, newThreadDescription, newThreadType, parentThreadId, createMainThread, createSubthread])
+      // Set the pending thread ID - the parent component will handle opening it
+      setPendingNewThreadId(newThreadId)
+    }
+  }, [newThreadName, newThreadDescription, newThreadType, parentThreadId, createThread])
 
   const handleEditThread = useCallback((threadId: string, currentThread: any) => {
     if (!currentThread) return
@@ -113,7 +121,7 @@ export function useThreadOperations(
     setPendingNewThreadId,
     
     // Actions
-    handleCreateNewThread,
+    handleSubmitCreateThreadForm,
     handleEditThread,
     openCreateThreadDialog,
     openEditThreadDialog,

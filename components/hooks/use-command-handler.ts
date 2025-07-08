@@ -23,15 +23,22 @@ export function useCommandHandler(
   temperature: number,
   maxTokens: number
 ) {
-  const { createFromCommand } = useThreadCreation()
+  const { createThread } = useThreadCreation()
 
   const handleCommandExecute = useCallback(async (command: any, selectedText: string, activeThreadId: string) => {
     // Create a new subthread with the command name and selected content
-    const newThreadId = createFromCommand({
+    const newThreadId = createThread({
+      type: 'command',
       command,
       selectedText,
       parentThreadId: activeThreadId
     })
+    
+    // Only proceed if thread was created successfully
+    if (!newThreadId) {
+      console.error('Failed to create command thread')
+      return
+    }
     
     // Execute command with selected text
     const commandPrompt = command.prompt.replace('{text}', selectedText)
@@ -68,7 +75,7 @@ export function useCommandHandler(
 
     // Open the new subthread in a new tab
     openThreadInNewTab(newThreadId)
-  }, [addMessage, editMessage, getThreadContext, openThreadInNewTab, showThinkingMode, temperature, maxTokens, createFromCommand])
+  }, [addMessage, editMessage, getThreadContext, openThreadInNewTab, showThinkingMode, temperature, maxTokens, createThread])
 
   return {
     handleCommandExecute,

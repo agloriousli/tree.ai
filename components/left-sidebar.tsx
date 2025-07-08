@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Thread } from "@/components/thread-provider"
+import { useThreadHierarchy } from "@/components/hooks/use-thread-hierarchy"
 
 interface LeftSidebarProps {
   selectedThreadId: string
@@ -22,24 +23,9 @@ interface LeftSidebarProps {
   onToggleCollapse: () => void
 }
 
-function getAncestorThreadIds(threadId: string, threads: Record<string, Thread>): string[] {
-  const ancestors: string[] = [];
-  let currentId: string | undefined = threadId;
-  while (currentId) {
-    const thread: Thread | undefined = threads[currentId];
-    if (thread && thread.parentThreadId) {
-      ancestors.push(thread.parentThreadId);
-      currentId = thread.parentThreadId;
-    } else {
-      break;
-    }
-  }
-  return ancestors;
-}
-
 export function LeftSidebar({ selectedThreadId, onThreadSelect, collapsed, onToggleCollapse }: LeftSidebarProps) {
   const { threads, getMainThreads } = useThreads()
-  const { createMainThread, createSubthread } = useThreadCreation()
+  const { createThread } = useThreadCreation()
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(() => new Set(["main"]))
   const [isMobile, setIsMobile] = useState(false)
   const [showNewThreadDialog, setShowNewThreadDialog] = useState(false)
@@ -47,6 +33,7 @@ export function LeftSidebar({ selectedThreadId, onThreadSelect, collapsed, onTog
   const [newThreadDescription, setNewThreadDescription] = useState("")
   const [newThreadType, setNewThreadType] = useState<"main" | "sub">("main")
   const [parentThreadId, setParentThreadId] = useState("")
+  const { getChildThreads, getAncestorThreadIds } = useThreadHierarchy()
 
   // Check for mobile screen size
   useEffect(() => {
@@ -78,30 +65,33 @@ export function LeftSidebar({ selectedThreadId, onThreadSelect, collapsed, onTog
     })
   }
 
-  const getChildThreads = (parentId: string): Thread[] => {
-    return Object.values(threads).filter((thread: Thread) => thread.parentThreadId === parentId)
-  }
-
   const handleCreateNewThread = () => {
-    let newThreadId: string | undefined;
+    let newThreadId: string | null;
     if (newThreadType === "main") {
-      newThreadId = createMainThread(newThreadName.trim(), newThreadDescription.trim() || undefined);
-      onThreadSelect(newThreadId, true);
+      newThreadId = createThread({
+        type: 'main',
+        name: newThreadName.trim(),
+        description: newThreadDescription.trim() || undefined
+      });
+      if (newThreadId) {
+        onThreadSelect(newThreadId, true);
+      }
     } else if (newThreadType === "sub" && parentThreadId) {
-      newThreadId = createSubthread({
+      newThreadId = createThread({
+        type: 'sub',
         name: newThreadName.trim(),
         description: newThreadDescription.trim() || undefined,
         parentThreadId: parentThreadId
       });
-      onThreadSelect(newThreadId, true);
+      if (newThreadId) {
+        onThreadSelect(newThreadId, true);
 
-      // --- Expand all ancestors so the new subthread is visible ---
-      setTimeout(() => {
-        if (newThreadId) {
-          const ancestorIds = getAncestorThreadIds(newThreadId, threads);
-          setExpandedThreads(prev => new Set([...prev, ...ancestorIds, parentThreadId]));
-        }
-      }, 0);
+        // --- Expand all ancestors so the new subthread is visible ---
+        setTimeout(() => {
+          const ancestorIds = getAncestorThreadIds(newThreadId!);
+          setExpandedThreads(prev => new Set([...prev, ...ancestorIds, parentThreadId!]));
+        }, 0);
+      }
     }
 
     // Reset form
@@ -114,7 +104,7 @@ export function LeftSidebar({ selectedThreadId, onThreadSelect, collapsed, onTog
 
   const handleThreadClick = (threadId: string) => {
     // Expand all ancestors so the selected thread is visible
-    const ancestorIds = getAncestorThreadIds(threadId, threads);
+    const ancestorIds = getAncestorThreadIds(threadId);
     setExpandedThreads(prev => new Set([...prev, ...ancestorIds]));
     onThreadSelect(threadId, true);
   }

@@ -11,7 +11,9 @@ import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { formatTime } from "@/lib/utils"
-import { DataManagement } from "@/components/data-management"
+import { DataManagement } from "@/components/settings/data-management"
+import { useMessageContext } from "@/components/hooks/use-message-context"
+import { useThreadHierarchy } from "@/components/hooks/use-thread-hierarchy"
 
 interface ThreadContextManagerProps {
   threadId: string
@@ -27,10 +29,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
     removeContextMessage,
     excludeMessageFromThread,
     includeMessageInThread,
-    getThreadContext,
     getThreadHierarchy,
-    getAllMessages,
-    getMainThreads,
     showThinkingMode,
     setShowThinkingMode,
     maxContextMessages,
@@ -46,9 +45,28 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
 
   const currentThread = threads[threadId]
   const hierarchy = getThreadHierarchy(threadId)
-  const contextMessages = getThreadContext(threadId)
-  const allMessages = getAllMessages()
-  const mainThreads = getMainThreads()
+  
+  // Use unified message context hook
+  const { 
+    isMessageInContext, 
+    isMessageExcluded, 
+    isMessageExplicitlyIncluded,
+    contextMessages 
+  } = useMessageContext(threadId)
+
+  // Helper functions specific to this component
+  const isThreadInContext = (threadId: string) => currentThread?.contextThreadIds.includes(threadId) || false
+
+  const getMessageStatus = (messageId: string) => {
+    const inContext = isMessageInContext(messageId)
+    const excluded = isMessageExcluded(messageId)
+    const explicitly = isMessageExplicitlyIncluded(messageId)
+
+    if (excluded) return { status: "excluded", color: "destructive" }
+    if (explicitly) return { status: "explicitly included", color: "default" }
+    if (inContext) return { status: "inherited", color: "secondary" }
+    return { status: "not included", color: "outline" }
+  }
 
   // Handle mouse down for resizing
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -86,39 +104,13 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
     }
   }, [isResizing])
 
-  // Get the root thread for "All Threads" mode
-  const getRootThread = (thread: any): any => {
-    if (!thread) return undefined;
-    if (!thread.parentThreadId) return thread;
-    return getRootThread(threads[thread.parentThreadId]);
-  }
-
-  const rootThread = getRootThread(currentThread)
-
-  // Get all threads under the same root
-  const getAllThreadsUnderRoot = (rootId: string): string[] => {
-    const result: string[] = [rootId]
-    const addChildren = (parentId: string) => {
-      Object.values(threads).forEach((thread) => {
-        if (thread.parentThreadId === parentId) {
-          result.push(thread.id)
-          addChildren(thread.id)
-        }
-      })
-    }
-    addChildren(rootId)
-    return result.filter((id) => id !== threadId) // Exclude current thread
-  }
-
   // Get available threads (excluding current thread and its hierarchy)
   const availableThreads = Object.values(threads).filter(
     (thread) => thread.id !== threadId && !hierarchy.some((h) => h.id === thread.id),
   )
 
   // Get child threads for hierarchy display
-  const getChildThreads = (parentId: string) => {
-    return Object.values(threads).filter((thread) => thread.parentThreadId === parentId)
-  }
+  const { getChildThreads } = useThreadHierarchy()
 
   // Toggle item expansion (threads or messages)
   const toggleItemExpansion = (itemId: string) => {
@@ -131,24 +123,6 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
       }
       return newSet
     })
-  }
-
-  // Helper functions for message/thread state
-  const isMessageInContext = (messageId: string) => contextMessages.some((msg) => msg.id === messageId)
-  const isMessageExcluded = (messageId: string) => currentThread?.excludedMessageIds.includes(messageId) || false
-  const isMessageExplicitlyIncluded = (messageId: string) =>
-    currentThread?.contextMessageIds.includes(messageId) || false
-  const isThreadInContext = (threadId: string) => currentThread?.contextThreadIds.includes(threadId) || false
-
-  const getMessageStatus = (messageId: string) => {
-    const inContext = isMessageInContext(messageId)
-    const excluded = isMessageExcluded(messageId)
-    const explicitly = isMessageExplicitlyIncluded(messageId)
-
-    if (excluded) return { status: "excluded", color: "destructive" }
-    if (explicitly) return { status: "explicitly included", color: "default" }
-    if (inContext) return { status: "inherited", color: "secondary" }
-    return { status: "not included", color: "outline" }
   }
 
   // Get selection state for a thread (all, some, none)
@@ -510,7 +484,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
                     {areAllThreadsSelected() ? "Unselect All" : "Select All"}
                     </Button>
                 </div>
-                <div className="space-y-1">{mainThreads.map((mainThread) => renderUnifiedHierarchy(mainThread))}</div>
+                <div className="space-y-1">{availableThreads.map((thread) => renderUnifiedHierarchy(thread))}</div>
               </div>
             </CardContent>
           </Card>

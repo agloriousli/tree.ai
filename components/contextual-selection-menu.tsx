@@ -28,7 +28,7 @@ export function ContextualSelectionMenu({ onThreadSelect, onCommandExecute }: Co
   })
   const menuRef = useRef<HTMLDivElement>(null)
   const { messages } = useThreads()
-  const { createFromText } = useThreadCreation()
+  const { createThread } = useThreadCreation()
   const [messageId, setMessageId] = useState<string | null>(null)
   const [showCommands, setShowCommands] = useState(false)
   const [commands, setCommands] = useState<Command[]>([])
@@ -161,12 +161,15 @@ export function ContextualSelectionMenu({ onThreadSelect, onCommandExecute }: Co
           if (messageId) {
             const parentMessage = messages[messageId]
             const parentThreadId = parentMessage?.threadId ?? null
-            const newThreadId = createFromText({
-              text: menu.text,
+            const newThreadId = createThread({
+              type: 'text',
+              selectedText: menu.text,
               parentThreadId: parentThreadId || undefined,
               isMainThread: false
             })
-            onThreadSelect(newThreadId, { pending: true })
+            if (newThreadId) {
+              onThreadSelect(newThreadId, { pending: true })
+            }
             setMenu((prev) => ({ ...prev, visible: false }))
           }
         }}
@@ -178,11 +181,14 @@ export function ContextualSelectionMenu({ onThreadSelect, onCommandExecute }: Co
       <button
         className="hover:underline px-2 py-1 text-left"
         onClick={() => {
-          const newThreadId = createFromText({
-            text: menu.text,
+          const newThreadId = createThread({
+            type: 'text',
+            selectedText: menu.text,
             isMainThread: true
           })
-          onThreadSelect(newThreadId, { pending: true })
+          if (newThreadId) {
+            onThreadSelect(newThreadId, { pending: true })
+          }
           setMenu((prev) => ({ ...prev, visible: false }))
         }}
         aria-label="Create main thread from selection"

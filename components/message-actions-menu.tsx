@@ -35,7 +35,7 @@ export function MessageActionsMenu({ message, currentThreadId, onEdit, onReply, 
     excludeMessageFromThread,
     threads,
   } = useThreads()
-  const { createFromMessage } = useThreadCreation()
+  const { createThread } = useThreadCreation()
   const [showForkDialog, setShowForkDialog] = useState(false)
   const [forkName, setForkName] = useState("")
 
@@ -73,8 +73,9 @@ export function MessageActionsMenu({ message, currentThreadId, onEdit, onReply, 
 
   const confirmFork = () => {
     if (forkName.trim()) {
-      createFromMessage({
-        messageId: message.id,
+      createThread({
+        type: 'message',
+        sourceMessageId: message.id,
         name: forkName.trim()
       })
       setShowForkDialog(false)

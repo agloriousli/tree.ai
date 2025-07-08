@@ -1,10 +1,11 @@
 "use client"
 
 import type React from "react"
+import { useThreadCreation } from "@/components/hooks/use-thread-creation";
 import { useState, useEffect, useRef } from "react"
 import { useThreads } from "@/components/thread-provider"
 import { MessageInput } from "@/components/message-input"
-import { SettingsPanel } from "@/components/settings-panel"
+import { GettingStartedGuide } from "@/components/getting-started-guide"
 import { ContextualSelectionMenu } from "@/components/contextual-selection-menu"
 import { TabManager } from "@/components/tab-manager"
 import { MessageContainer } from "@/components/message-container"
@@ -14,6 +15,7 @@ import { useTabManager } from "@/components/hooks/use-tab-manager"
 import { useMessageHandler } from "@/components/hooks/use-message-handler"
 import { useCommandHandler } from "@/components/hooks/use-command-handler"
 import { useThreadOperations } from "@/components/hooks/use-thread-operations"
+import { Button } from "./ui/button"
 
 interface TabbedChatInterfaceProps {
   selectedThreadId: string
@@ -114,10 +116,6 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
     tabManager.closeTab(threadId)
   }
 
-  const handleCreateTab = () => {
-    threadOperations.openCreateThreadDialog()
-  }
-
   const handleEditThread = () => {
     if (!currentThread) return
     threadOperations.handleEditThread(activeThreadId, currentThread)
@@ -131,14 +129,28 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
     setIsNearBottom(isNearBottomNow)
   }
 
+  const { createThread } = useThreadCreation();
+
   // Show "no threads" message when user has deleted all threads
-  if (Object.keys(threads).length === 0) {
+  if (tabManager.tabs.length === 0) {
     return (
-      <div className="flex-1 flex min-w-0">
-        {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* No Threads Message */}
-          
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-muted-foreground text-lg">No threads open</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Select a thread from the sidebar or create a new thread to get started.
+          </p>
+          <Button
+            onClick={() => {
+              const newThreadId = createThread({ type: "main", name: "Untitled Thread" });
+              if (newThreadId) {
+                tabManager.openThreadInNewTab(newThreadId);
+              }
+            }}
+            className="mt-4"
+          >
+            Create New Thread
+          </Button>
         </div>
       </div>
     )
@@ -155,7 +167,12 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
           threads={threads}
           onTabSwitch={handleTabSwitch}
           onTabClose={handleTabClose}
-          onCreateTab={handleCreateTab}
+          onCreateTab={() => {
+            const newThreadId = threadOperations.createThread({ type: "main", name: "Untitled Thread" });
+            if (newThreadId) {
+              tabManager.openThreadInNewTab(newThreadId);
+            }
+          }}
         />
 
         {/* Contextual Selection Menu */}
@@ -216,7 +233,7 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
         onThreadDescriptionChange={threadOperations.setNewThreadDescription}
         onThreadTypeChange={threadOperations.setNewThreadType}
         onParentThreadChange={threadOperations.setParentThreadId}
-        onSubmit={threadOperations.handleCreateNewThread}
+        onSubmit={threadOperations.handleSubmitCreateThreadForm}
       />
 
       <EditThreadDialog
