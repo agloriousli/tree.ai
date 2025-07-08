@@ -3,7 +3,9 @@ import type { Message } from "@/components/thread-provider"
 export async function generateResponse(
   contextMessages: Array<{ role: "user" | "assistant"; content: string }>, 
   onChunk?: (chunk: string) => void,
-  showThinkingMode?: boolean
+  showThinkingMode?: boolean,
+  temperature?: number,
+  maxTokens?: number
 ): Promise<string> {
   const res = await fetch("/api/chat", {
     method: "POST",
@@ -14,6 +16,8 @@ export async function generateResponse(
         content,
       })),
       showThinkingMode,
+      temperature,
+      maxTokens,
     }),
   })
 

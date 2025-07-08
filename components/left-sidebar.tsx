@@ -4,25 +4,42 @@ import { ChevronRight, ChevronDown, MessageSquare, Hash, ChevronLeft, Menu, Plus
 import { ThreadActionsMenu } from "@/components/thread-actions-menu"
 import { Button } from "@/components/ui/button"
 import { useThreads } from "@/components/thread-provider"
+import { useThreadCreation } from "@/components/hooks/use-thread-creation"
 import { useState, useEffect } from "react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { Thread } from "@/components/thread-provider"
 
-interface ChatSidebarProps {
+interface LeftSidebarProps {
   selectedThreadId: string
   onThreadSelect: (threadId: string, openInNewTab?: boolean) => void
   collapsed: boolean
   onToggleCollapse: () => void
 }
 
-export function ChatSidebar({ selectedThreadId, onThreadSelect, collapsed, onToggleCollapse }: ChatSidebarProps) {
-  const { threads, getMainThreads, createMainThread, createThread } = useThreads()
+function getAncestorThreadIds(threadId: string, threads: Record<string, Thread>): string[] {
+  const ancestors: string[] = [];
+  let currentId: string | undefined = threadId;
+  while (currentId) {
+    const thread: Thread | undefined = threads[currentId];
+    if (thread && thread.parentThreadId) {
+      ancestors.push(thread.parentThreadId);
+      currentId = thread.parentThreadId;
+    } else {
+      break;
+    }
+  }
+  return ancestors;
+}
+
+export function LeftSidebar({ selectedThreadId, onThreadSelect, collapsed, onToggleCollapse }: LeftSidebarProps) {
+  const { threads, getMainThreads } = useThreads()
+  const { createMainThread, createSubthread } = useThreadCreation()
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(() => new Set(["main"]))
   const [isMobile, setIsMobile] = useState(false)
   const [showNewThreadDialog, setShowNewThreadDialog] = useState(false)
@@ -61,34 +78,48 @@ export function ChatSidebar({ selectedThreadId, onThreadSelect, collapsed, onTog
     })
   }
 
-  const getChildThreads = (parentId: string) => {
-    return Object.values(threads).filter((thread) => thread.parentThreadId === parentId)
+  const getChildThreads = (parentId: string): Thread[] => {
+    return Object.values(threads).filter((thread: Thread) => thread.parentThreadId === parentId)
   }
 
   const handleCreateNewThread = () => {
+    let newThreadId: string | undefined;
     if (newThreadType === "main") {
-      const newThreadId = createMainThread(newThreadName.trim(), newThreadDescription.trim() || undefined)
-      onThreadSelect(newThreadId, true)
+      newThreadId = createMainThread(newThreadName.trim(), newThreadDescription.trim() || undefined);
+      onThreadSelect(newThreadId, true);
     } else if (newThreadType === "sub" && parentThreadId) {
-      // For subthreads, create a proper subthread with parent context
-      const newThreadId = createThread(newThreadName.trim(), parentThreadId, undefined, false)
-      onThreadSelect(newThreadId, true)
+      newThreadId = createSubthread({
+        name: newThreadName.trim(),
+        description: newThreadDescription.trim() || undefined,
+        parentThreadId: parentThreadId
+      });
+      onThreadSelect(newThreadId, true);
+
+      // --- Expand all ancestors so the new subthread is visible ---
+      setTimeout(() => {
+        if (newThreadId) {
+          const ancestorIds = getAncestorThreadIds(newThreadId, threads);
+          setExpandedThreads(prev => new Set([...prev, ...ancestorIds, parentThreadId]));
+        }
+      }, 0);
     }
-    
+
     // Reset form
-    setNewThreadName("Untitled Thread")
-    setNewThreadDescription("")
-    setNewThreadType("main")
-    setParentThreadId("")
-    setShowNewThreadDialog(false)
+    setNewThreadName("Untitled Thread");
+    setNewThreadDescription("");
+    setNewThreadType("main");
+    setParentThreadId("");
+    setShowNewThreadDialog(false);
   }
 
   const handleThreadClick = (threadId: string) => {
-    console.log(`Sidebar: Thread clicked: ${threadId}`)
-    onThreadSelect(threadId, true)
+    // Expand all ancestors so the selected thread is visible
+    const ancestorIds = getAncestorThreadIds(threadId, threads);
+    setExpandedThreads(prev => new Set([...prev, ...ancestorIds]));
+    onThreadSelect(threadId, true);
   }
 
-  const renderThread = (thread: any, level = 0) => {
+  const renderThread = (thread: Thread, level = 0) => {
     const childThreads = getChildThreads(thread.id)
     const hasChildren = childThreads.length > 0
     const isExpanded = expandedThreads instanceof Set && expandedThreads.has(thread.id)
@@ -104,11 +135,9 @@ export function ChatSidebar({ selectedThreadId, onThreadSelect, collapsed, onTog
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 p-0 hover:bg-sidebar-accent flex-shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleExpanded(thread.id)
-                  }}
+            
                 >
+           
                   {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </Button>
               </CollapsibleTrigger>

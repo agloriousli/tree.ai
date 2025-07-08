@@ -2,21 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { ThreadProvider, useThreads } from "@/components/thread-provider"
-import { ChatSidebar } from "@/components/chat-sidebar"
+import { LeftSidebar } from "@/components/left-sidebar"
 import { TabbedChatInterface } from "@/components/tabbed-chat-interface"
+import { RightSidebar } from "@/components/right-sidebar"
+
 
 function HomeContent() {
   const [selectedThreadId, setSelectedThreadId] = useState<string>("")
-  const [showContextPanel, setShowContextPanel] = useState(false)
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { threads } = useThreads()
-
-  useEffect(() => {
-    if (!selectedThreadId && Object.keys(threads).length > 0) {
-      const firstThreadId = Object.keys(threads)[0]
-      setSelectedThreadId(firstThreadId)
-    }
-  }, [selectedThreadId, threads])
 
   const handleThreadSelect = (threadId: string, openInNewTab?: boolean) => {
     console.log(`App: Thread selected: ${threadId}, openInNewTab: ${openInNewTab}`)
@@ -30,24 +25,35 @@ function HomeContent() {
     }
   }
 
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <ChatSidebar
-        selectedThreadId={selectedThreadId}
-        onThreadSelect={handleThreadSelect}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+  const onToggleSettings = () => {
+    setShowSettingsPanel(!showSettingsPanel)
+  }
 
-      <div className="flex-1 flex min-w-0 overflow-hidden">
-        <TabbedChatInterface
+  return (
+      <div className="flex h-screen bg-background overflow-hidden">
+        <LeftSidebar
           selectedThreadId={selectedThreadId}
-          showContextPanel={showContextPanel}
-          onToggleContext={() => setShowContextPanel(!showContextPanel)}
-          onActiveThreadChange={handleActiveThreadChange}
+          onThreadSelect={handleThreadSelect}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+
+        <div className="flex-1 flex min-w-0 overflow-hidden">
+          <TabbedChatInterface
+            selectedThreadId={selectedThreadId}
+            showSettingsPanel={showSettingsPanel}
+            onToggleSettings={onToggleSettings}
+            onActiveThreadChange={handleActiveThreadChange}
+          />
+
+        </div>
+        
+        <RightSidebar
+          showSettingsPanel={showSettingsPanel}
+          selectedThreadId={selectedThreadId}
+          onToggleSettings={onToggleSettings}
         />
       </div>
-    </div>
   )
 }
 

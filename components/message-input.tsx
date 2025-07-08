@@ -1,11 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Send, X, Maximize2, Minimize2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { SlashCommandPopup } from "@/components/slash-command-popup"
+import { Command } from "@/lib/commands"
 
 interface MessageInputProps {
   onSend: (message: string) => void
@@ -22,6 +24,9 @@ export function MessageInput({
 }: MessageInputProps) {
   const [input, setInput] = useState("")
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showSlashCommands, setShowSlashCommands] = useState(false)
+  const [slashCommandPosition, setSlashCommandPosition] = useState<{ x: number; y: number } | null>(null)
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
 
   const handleSend = () => {
     if (!input.trim() || isLoading) return
@@ -37,6 +42,37 @@ export function MessageInput({
     }
   }
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setInput(value)
+
+    // Check for slash command trigger
+    if (value.endsWith('\\')) {
+      const rect = inputRef.current?.getBoundingClientRect()
+      if (rect) {
+        setSlashCommandPosition({
+          x: rect.left,
+          y: rect.bottom + 5
+        })
+        setShowSlashCommands(true)
+      }
+    } else {
+      setShowSlashCommands(false)
+    }
+  }
+
+  const handleSelectCommand = (command: Command) => {
+    // Replace the \ with the command
+    const newInput = input.slice(0, -1) + `\\${command.name} `
+    setInput(newInput)
+    setShowSlashCommands(false)
+    
+    // Focus back to input
+    setTimeout(() => {
+      inputRef.current?.focus()
+    }, 0)
+  }
+
   return (
     <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-3 sm:p-4 space-y-3">
       {/* Context Info */}
@@ -49,8 +85,9 @@ export function MessageInput({
         <div className="flex-1 relative">
           {isExpanded ? (
             <Textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyPress}
               placeholder={placeholder}
               disabled={isLoading}
@@ -59,8 +96,9 @@ export function MessageInput({
             />
           ) : (
             <Input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder={placeholder}
               disabled={isLoading}
@@ -107,8 +145,17 @@ export function MessageInput({
       {/* Keyboard Hint */}
       <div className="text-xs text-muted-foreground text-center">
         Press <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Enter</kbd> to send,
-        <kbd className="px-1 py-0.5 bg-muted rounded text-xs ml-1">Shift + Enter</kbd> for new line
+        <kbd className="px-1 py-0.5 bg-muted rounded text-xs ml-1">Shift + Enter</kbd> for new line,
+        <kbd className="px-1 py-0.5 bg-muted rounded text-xs ml-1">\</kbd> for commands
       </div>
+
+      {/* Slash Command Popup */}
+      <SlashCommandPopup
+        isOpen={showSlashCommands}
+        onClose={() => setShowSlashCommands(false)}
+        onSelectCommand={handleSelectCommand}
+        position={slashCommandPosition}
+      />
     </div>
   )
 }

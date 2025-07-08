@@ -13,6 +13,7 @@ import {
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useThreads, type Message } from "@/components/thread-provider"
+import { useThreadCreation } from "@/components/hooks/use-thread-creation"
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -29,19 +30,16 @@ interface MessageActionsMenuProps {
 export function MessageActionsMenu({ message, currentThreadId, onEdit, onReply, onFork }: MessageActionsMenuProps) {
   const {
     deleteMessage,
-    forkMessage,
     addContextMessage,
     removeContextMessage,
     excludeMessageFromThread,
-    includeMessageInThread,
     threads,
-    getMainThreads,
   } = useThreads()
+  const { createFromMessage } = useThreadCreation()
   const [showForkDialog, setShowForkDialog] = useState(false)
   const [forkName, setForkName] = useState("")
 
   const currentThread = threads[currentThreadId]
-  const mainThreads = getMainThreads()
   const otherThreads = Object.values(threads).filter((t) => t.id !== currentThreadId)
   
   // Debug: Log available threads for context
@@ -75,7 +73,10 @@ export function MessageActionsMenu({ message, currentThreadId, onEdit, onReply, 
 
   const confirmFork = () => {
     if (forkName.trim()) {
-      forkMessage(message.id, forkName.trim())
+      createFromMessage({
+        messageId: message.id,
+        name: forkName.trim()
+      })
       setShowForkDialog(false)
       onFork?.()
     }

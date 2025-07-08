@@ -11,6 +11,8 @@ interface StorageData {
     showInlineForks: boolean
     showThinkingMode: boolean
     maxContextMessages: number | null
+    temperature: number
+    maxTokens: number
   }
   lastSaved: string
 }
@@ -67,6 +69,8 @@ export class StorageManager {
         showInlineForks: oldData.settings?.showInlineForks ?? true,
         showThinkingMode: oldData.settings?.showThinkingMode ?? false,
         maxContextMessages: oldData.settings?.maxContextMessages ?? 15,
+        temperature: oldData.settings?.temperature ?? 0.3,
+        maxTokens: oldData.settings?.maxTokens ?? 8000,
       },
       lastSaved: new Date().toISOString()
     }
@@ -101,6 +105,8 @@ export class StorageManager {
       showInlineForks: boolean
       showThinkingMode: boolean
       maxContextMessages: number | null
+      temperature: number
+      maxTokens: number
     }
   ): void {
     if (!this.autoSaveEnabled) return

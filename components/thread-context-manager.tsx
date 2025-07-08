@@ -88,8 +88,9 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
 
   // Get the root thread for "All Threads" mode
   const getRootThread = (thread: any): any => {
-    if (!thread.parentThreadId) return thread
-    return getRootThread(threads[thread.parentThreadId])
+    if (!thread) return undefined;
+    if (!thread.parentThreadId) return thread;
+    return getRootThread(threads[thread.parentThreadId]);
   }
 
   const rootThread = getRootThread(currentThread)
@@ -273,11 +274,11 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
       <div key={thread.id} className="space-y-1">
         {/* Thread Row */}
         <div className="flex items-center space-x-2 p-1 rounded hover:bg-muted/50 min-w-0">
-          <Checkbox
+                <Checkbox
             checked={selectionState === "all"}
             onCheckedChange={(checked) => handleThreadSelection(thread, checked as boolean)}
-            className="flex-shrink-0"
-          />
+                  className="flex-shrink-0"
+                />
           
           {canExpand && (
             <Button
@@ -289,7 +290,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
               {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             </Button>
           )}
-          
+
           <div className="flex items-center space-x-2 min-w-0 flex-1">
             {thread.isMainThread ? (
               <MessageSquare className="h-3 w-3 text-primary flex-shrink-0" />
@@ -297,11 +298,11 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
               <Hash className="h-3 w-3 text-muted-foreground flex-shrink-0" />
             )}
             <span className="text-xs font-medium truncate min-w-0 flex-1" title={thread.name}>
-              {thread.name}
+                {thread.name}
             </span>
             <Badge variant="outline" className="text-xs flex-shrink-0">
-              {threadMessages.length}
-            </Badge>
+                {threadMessages.length}
+              </Badge>
           </div>
         </div>
 
@@ -311,7 +312,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
             {threadMessages.map((msg: Message) => {
               const messageStatus = getMessageStatus(msg.id)
               const isSelected = isMessageInContext(msg.id)
-              
+
               return (
                 <div key={msg.id} className="flex items-start space-x-2 p-1 rounded hover:bg-muted/30 min-w-0">
                   <Checkbox
@@ -323,7 +324,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
                     <div className="flex items-center space-x-2 mb-1">
                       <Badge variant={messageStatus.color as any} className="text-xs flex-shrink-0">
                         {messageStatus.status}
-                      </Badge>
+                    </Badge>
                       <span className="text-xs text-muted-foreground flex-shrink-0">
                         {formatTime(msg.timestamp)}
                       </span>
@@ -388,12 +389,12 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Show thinking process</p>
-                  <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                     When enabled, the AI will show its reasoning step by step
-                  </p>
-                </div>
+                        </p>
+                      </div>
                 <Switch checked={showThinkingMode} onCheckedChange={setShowThinkingMode} />
-              </div>
+                  </div>
             </CardContent>
           </Card>
 
@@ -407,16 +408,16 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Max context messages</p>
-                    <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                       Limit how many messages are sent to the AI (null = unlimited)
-                    </p>
-                  </div>
+                        </p>
+                      </div>
                   <Switch 
                     checked={maxContextMessages !== null} 
                     onCheckedChange={(checked) => setMaxContextMessages(checked ? 15 : null)} 
                   />
-                </div>
-                
+                  </div>
+
                 {maxContextMessages !== null && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -439,10 +440,10 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
                       <span>50</span>
                       <span>75</span>
                       <span>100</span>
-                    </div>
+                      </div>
                   </div>
                 )}
-              </div>
+                </div>
             </CardContent>
           </Card>
 
@@ -469,35 +470,33 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
             </CardContent>
           </Card>
 
-
-
           {/* Thread & Message Selection */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center justify-between">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center justify-between">
                 <span className="truncate">Edit Context</span>
                 <div className="flex items-center space-x-2 flex-shrink-0">
                   <Switch checked={showSelectedOnly} onCheckedChange={setShowSelectedOnly} />
-                  <span className="text-xs text-muted-foreground">Selected only</span>
+                    <span className="text-xs text-muted-foreground">Selected only</span>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search messages..."
+                    value={messageSearch}
+                    onChange={(e) => setMessageSearch(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search messages..."
-                  value={messageSearch}
-                  onChange={(e) => setMessageSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
 
-              <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                <p>• Click thread checkbox to select/deselect all messages in that thread</p>
-                <p>• Click individual message checkboxes for granular control</p>
-                <p>• Partial selection (—) indicates some messages are selected</p>
-              </div>
+                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                  <p>• Click thread checkbox to select/deselect all messages in that thread</p>
+                  <p>• Click individual message checkboxes for granular control</p>
+                  <p>• Partial selection (—) indicates some messages are selected</p>
+                </div>
 
               <div className="border rounded-lg p-3 max-h-96 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3 pb-2 border-b min-w-0">
@@ -509,7 +508,7 @@ export function ThreadContextManager({ threadId, onClose }: ThreadContextManager
                     className="flex-shrink-0 ml-2"
                   >
                     {areAllThreadsSelected() ? "Unselect All" : "Select All"}
-                  </Button>
+                    </Button>
                 </div>
                 <div className="space-y-1">{mainThreads.map((mainThread) => renderUnifiedHierarchy(mainThread))}</div>
               </div>

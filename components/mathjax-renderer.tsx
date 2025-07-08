@@ -44,7 +44,7 @@ export function MathJaxRenderer({ content }: MathJaxRendererProps) {
       window.MathJax = {
         ...window.MathJax,
         tex: {
-          inlineMath: [['$', '$'], ['\\(', '\\)'], ['\\{', '\\}']],
+          inlineMath: [['$', '$'], ['\\(', '\\)'], ['(', ')'], ['[', ']'], ['\\{', '\\}']],
           displayMath: [['$$', '$$'], ['\\[', '\\]']],
           processEscapes: true,
           processEnvironments: true,

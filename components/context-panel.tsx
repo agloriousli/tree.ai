@@ -269,15 +269,15 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
                         {/* Messages Section */}
                         <div>
                           <h4 className="text-sm font-medium mb-2 text-muted-foreground">Messages in Context:</h4>
-                          <div className="space-y-2">
-                            {contextMessages.map((msg, index) => (
-                              <div key={index} className="p-2 bg-muted rounded text-sm">
+                      <div className="space-y-2">
+                        {contextMessages.map((msg, index) => (
+                          <div key={index} className="p-2 bg-muted rounded text-sm">
                                 <div className="flex items-center justify-between mb-1 min-w-0">
                                   <Badge variant={msg.role === "user" ? "default" : "secondary"} className="flex-shrink-0">{msg.role}</Badge>
                                   <span className="text-xs text-muted-foreground truncate ml-2 min-w-0 flex-1">
-                                    Thread: {threads[msg.threadId]?.name}
-                                  </span>
-                                </div>
+                                Thread: {threads[msg.threadId]?.name}
+                              </span>
+                            </div>
                                 <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
                               </div>
                             ))}

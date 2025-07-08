@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     const body = await req.json()
     console.log("Request body:", JSON.stringify(body, null, 2))
 
-    const { messages, showThinkingMode } = body
+    const { messages, showThinkingMode, temperature = 0.3, maxTokens = 8000 } = body
     
     console.log(`Sending ${messages.length} messages to LLM`)
     if (messages.length > 0) {
@@ -93,8 +93,8 @@ You have access to context from multiple conversation threads. Provide helpful, 
           },
           ...messages,
         ],
-        temperature: 0.3,
-        max_tokens: 8000,
+        temperature: temperature,
+        max_tokens: maxTokens,
         stream: true,
       }),
     })

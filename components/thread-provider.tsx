@@ -15,6 +15,7 @@ export interface Message {
   forkIds?: string[]
   isEdited?: boolean
   editHistory?: string[]
+  isSeed?: boolean
 }
 
 export interface Thread {
@@ -30,6 +31,21 @@ export interface Thread {
   isVisible?: boolean
   isMainThread?: boolean
   description?: string
+  subThreads: string[] // Array of direct subthread IDs
+}
+
+// Thread creation types
+export type ThreadCreationType = 'auto' | 'quick' | 'complex'
+
+export interface ThreadCreationOptions {
+  type: ThreadCreationType
+  name?: string
+  description?: string
+  parentThreadId?: string
+  rootMessageId?: string
+  selectedText?: string
+  sourceMessageId?: string
+  isSubthread?: boolean
 }
 
 interface ThreadContextType {
@@ -41,9 +57,18 @@ interface ThreadContextType {
   setShowThinkingMode: (show: boolean) => void
   maxContextMessages: number | null
   setMaxContextMessages: (max: number | null) => void
+  temperature: number
+  setTemperature: (temp: number) => void
+  maxTokens: number
+  setMaxTokens: (tokens: number) => void
 
-  createThread: (name: string, parentThreadId?: string, rootMessageId?: string, isMainThread?: boolean) => string
+  // Unified thread creation
+  createThread: (options: ThreadCreationOptions) => string
+  
+  // Legacy functions for backward compatibility
   createMainThread: (name: string, description?: string) => string
+  createThreadFromText: (text: string, parentThreadId: string | null, isSubthread: boolean) => string
+  
   addMessage: (threadId: string, content: string, role: "user" | "assistant") => string
   editMessage: (messageId: string, newContent: string) => void
   deleteMessage: (messageId: string) => void
@@ -72,7 +97,10 @@ interface ThreadContextType {
 
 const ThreadContext = createContext<ThreadContextType | null>(null)
 
-
+// Utility to auto-name thread from text
+function generateThreadName(text: string): string {
+  return text.length > 40 ? text.slice(0, 40) + "…" : text
+}
 
 export function ThreadProvider({ children }: { children: React.ReactNode }) {
   const [threads, setThreads] = useState<Record<string, Thread>>({})
@@ -80,6 +108,8 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
   const [showInlineForks, setShowInlineForks] = useState(true)
   const [showThinkingMode, setShowThinkingMode] = useState(false)
   const [maxContextMessages, setMaxContextMessages] = useState<number | null>(15)
+  const [temperature, setTemperature] = useState(0.3)
+  const [maxTokens, setMaxTokens] = useState(8000)
 
 
   // Auto-save data whenever it changes
@@ -89,6 +119,8 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
         showInlineForks,
         showThinkingMode,
         maxContextMessages,
+        temperature,
+        maxTokens,
       })
     }
   }, [threads, messages, showInlineForks, showThinkingMode, maxContextMessages])
@@ -102,50 +134,94 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       setShowInlineForks(savedData.settings.showInlineForks)
       setShowThinkingMode(savedData.settings.showThinkingMode)
       setMaxContextMessages(savedData.settings.maxContextMessages)
+      setTemperature(savedData.settings.temperature || 0.3)
+      setMaxTokens(savedData.settings.maxTokens || 8000)
       console.log('Data loaded from storage')
-    } else {
-      // Create default thread if no saved data
-      const threadId = generateId('thread')
-      const untitledThread: Thread = {
-        id: threadId,
-        name: "Untitled Thread",
-        messages: [],
-        contextThreadIds: [],
-        contextMessageIds: [],
-        excludedMessageIds: [],
-        level: 0,
-        isVisible: true,
-        isMainThread: true,
-      }
-      
-      setThreads({ [threadId]: untitledThread })
-      console.log('Created default thread')
-    }
+    } 
   }, [])
 
+  // Unified thread creation function - single point of entry for all thread creation
   const createThread = useCallback(
-    (name: string, parentThreadId?: string, rootMessageId?: string, isMainThread = false): string => {
+    (options: ThreadCreationOptions): string => {
+      const { type, name, description, parentThreadId, rootMessageId, selectedText, sourceMessageId, isSubthread } = options
+      
       const threadId = generateId('thread')
       const parentLevel = parentThreadId ? threads[parentThreadId]?.level || 0 : 0
+      const isMainThread = type === 'auto' || (!parentThreadId && !isSubthread)
+
+      let threadName: string
+      let initialMessages: Message[] = []
+
+      switch (type) {
+        case 'auto':
+          // Auto create: Sample thread for new users
+          threadName = "Sample Thread"
+          break
+
+        case 'quick':
+          // Quick create: From selected text, forking, or commands
+          if (selectedText) {
+            threadName = generateThreadName(selectedText)
+            // Add selected text as a user message (but don't send to LLM)
+            const messageId = generateId('msg')
+            const seedMessage: Message = {
+              id: messageId,
+              content: selectedText,
+              role: "user",
+              timestamp: new Date(),
+              threadId,
+              isSeed: true, // Flag to prevent sending to LLM
+            }
+            initialMessages = [seedMessage]
+            setMessages(prev => ({ ...prev, [messageId]: seedMessage }))
+          } else if (name) {
+            threadName = name
+          } else {
+            threadName = "Untitled Thread"
+          }
+          break
+
+        case 'complex':
+          // Complex create: User-defined name and description
+          threadName = name || "Untitled Thread"
+          break
+
+        default:
+          throw new Error(`Invalid thread creation type: ${type}`)
+      }
 
       const newThread: Thread = {
         id: threadId,
-        name,
+        name: threadName,
+        description,
         parentThreadId,
         rootMessageId,
-        messages: [],
+        messages: initialMessages,
         contextThreadIds: parentThreadId && !isMainThread ? [parentThreadId] : [],
         contextMessageIds: [],
         excludedMessageIds: [],
         level: isMainThread ? 0 : parentLevel + 1,
         isVisible: true,
         isMainThread,
+        subThreads: [],
       }
 
-      setThreads((prev) => ({
+      setThreads((prev) => {
+        const updatedThreads = {
         ...prev,
         [threadId]: newThread,
-      }))
+        }
+
+        // Update parent thread's subThreads array
+        if (parentThreadId && prev[parentThreadId]) {
+          updatedThreads[parentThreadId] = {
+            ...prev[parentThreadId],
+            subThreads: [...prev[parentThreadId].subThreads, threadId],
+          }
+        }
+
+        return updatedThreads
+      })
 
       return threadId
     },
@@ -154,7 +230,7 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
 
   const createMainThread = useCallback(
     (name: string, description?: string): string => {
-      const threadId = createThread(name, undefined, undefined, true)
+      const threadId = createThread({ type: 'auto', name, description, isSubthread: true })
 
       setThreads((prev) => ({
         ...prev,
@@ -329,7 +405,7 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
       if (!message) return ""
 
       const defaultName = threadName || `Fork: ${message.content.slice(0, 30)}...`
-      const newThreadId = createThread(defaultName, message.threadId, messageId)
+      const newThreadId = createThread({ type: 'auto', name: defaultName, isSubthread: true })
 
       setMessages((prev) => ({
         ...prev,
@@ -583,6 +659,8 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
     setShowInlineForks(importedData.settings.showInlineForks)
     setShowThinkingMode(importedData.settings.showThinkingMode)
     setMaxContextMessages(importedData.settings.maxContextMessages)
+    setTemperature(importedData.settings.temperature || 0.3)
+    setMaxTokens(importedData.settings.maxTokens || 8000)
   }, [])
 
   const downloadBackup = useCallback((): void => {
@@ -596,6 +674,8 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
     setShowInlineForks(importedData.settings.showInlineForks)
     setShowThinkingMode(importedData.settings.showThinkingMode)
     setMaxContextMessages(importedData.settings.maxContextMessages)
+    setTemperature(importedData.settings.temperature || 0.3)
+    setMaxTokens(importedData.settings.maxTokens || 8000)
   }, [])
 
   const clearAllData = useCallback((): void => {
@@ -605,11 +685,51 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
     setShowInlineForks(true)
     setShowThinkingMode(false)
     setMaxContextMessages(15)
+    setTemperature(0.3)
+    setMaxTokens(8000)
   }, [])
 
   const getStorageInfo = useCallback((): { size: string; lastSaved: string | null; itemCount: number } => {
     return storageManager.getStorageInfo()
   }, [])
+
+  const createThreadFromText = useCallback(
+    (text: string, parentThreadId: string | null, isSubthread = true): string => {
+      const threadId = generateId("thread")
+      const messageId = generateId("msg")
+      const parentLevel = parentThreadId ? threads[parentThreadId]?.level || 0 : 0
+      const thread = {
+        id: threadId,
+        name: generateThreadName(text),
+        parentThreadId: isSubthread && parentThreadId ? parentThreadId : undefined,
+        rootMessageId: messageId,
+        messages: [
+          {
+            id: messageId,
+            role: "user" as const,
+            content: text,
+            timestamp: new Date(),
+            threadId: threadId,
+            isEdited: false,
+            isSeed: true,
+          },
+        ],
+        contextThreadIds: [],
+        contextMessageIds: [],
+        excludedMessageIds: [],
+        level: isSubthread && parentThreadId ? parentLevel + 1 : 0,
+        isVisible: true,
+        isMainThread: !isSubthread,
+        subThreads: [],
+      }
+      setThreads((prev) => ({
+        ...prev,
+        [threadId]: thread,
+      }))
+      return threadId
+    },
+    [setThreads, threads]
+  )
 
   return (
     <ThreadContext.Provider
@@ -622,6 +742,10 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
         setShowThinkingMode,
         maxContextMessages,
         setMaxContextMessages,
+        temperature,
+        setTemperature,
+        maxTokens,
+        setMaxTokens,
 
         createThread,
         createMainThread,
@@ -649,6 +773,7 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
         uploadBackup,
         clearAllData,
         getStorageInfo,
+        createThreadFromText,
       }}
     >
       {children}
