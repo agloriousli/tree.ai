@@ -5,7 +5,6 @@ import { useThreadCreation } from "@/components/hooks/use-thread-creation";
 import { useState, useEffect, useRef } from "react"
 import { useThreads } from "@/components/thread-provider"
 import { MessageInput } from "@/components/message-input"
-import { GettingStartedGuide } from "@/components/getting-started-guide"
 import { ContextualSelectionMenu } from "@/components/contextual-selection-menu"
 import { TabManager } from "@/components/tab-manager"
 import { MessageContainer } from "@/components/message-container"
@@ -13,7 +12,6 @@ import { CreateThreadDialog } from "@/components/dialogs/create-thread-dialog"
 import { EditThreadDialog } from "@/components/dialogs/edit-thread-dialog"
 import { useTabManager } from "@/components/hooks/use-tab-manager"
 import { useMessageHandler } from "@/components/hooks/use-message-handler"
-import { useCommandHandler } from "@/components/hooks/use-command-handler"
 import { useThreadOperations } from "@/components/hooks/use-thread-operations"
 import { Button } from "./ui/button"
 
@@ -32,7 +30,6 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
   // Custom hooks
   const tabManager = useTabManager()
   const messageHandler = useMessageHandler(addMessage, editMessage, getThreadContext, showThinkingMode, temperature, maxTokens)
-  const commandHandler = useCommandHandler(addMessage, editMessage, getThreadContext, tabManager.openThreadInNewTab, showThinkingMode, temperature, maxTokens)
   const threadOperations = useThreadOperations(updateThread)
 
   const activeThreadId = tabManager.curTab || ""
@@ -118,7 +115,7 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
 
   const handleEditThread = () => {
     if (!currentThread) return
-    threadOperations.handleEditThread(activeThreadId, currentThread)
+    threadOperations.openEditThreadDialog(currentThread)
   }
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -168,7 +165,7 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
           onTabSwitch={handleTabSwitch}
           onTabClose={handleTabClose}
           onCreateTab={() => {
-            const newThreadId = threadOperations.createThread({ type: "main", name: "Untitled Thread" });
+            const newThreadId = createThread({ type: "main", name: "Untitled Thread" });
             if (newThreadId) {
               tabManager.openThreadInNewTab(newThreadId);
             }
@@ -184,9 +181,7 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
               handleThreadSelect(threadId)
             }
           }}
-          onCommandExecute={async (command, selectedText) => {
-            await commandHandler.handleCommandExecute(command, selectedText, activeThreadId)
-          }}
+          
         />
 
         {/* Message Container */}
@@ -243,7 +238,7 @@ export function TabbedChatInterface({ selectedThreadId, showSettingsPanel, onTog
         threadDescription={threadOperations.editThreadDescription}
         onThreadNameChange={threadOperations.setEditThreadName}
         onThreadDescriptionChange={threadOperations.setEditThreadDescription}
-        onSubmit={() => handleEditThread()}
+        onSubmit={() => threadOperations.handleEditThread(activeThreadId, currentThread)}
       />
     </div>
   )

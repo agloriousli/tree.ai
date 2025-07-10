@@ -4,11 +4,9 @@ import { useMessageContext } from "@/components/hooks/use-message-context"
 import { useThreadHierarchy } from "@/components/hooks/use-thread-hierarchy"
 import { ContextTab } from "./settings/ContextTab"
 import { ModelTab } from "./settings/ModelTab"
-import { CommandsTab } from "./settings/CommandsTab"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Settings, Sliders, Brain, MessageSquare, X } from "lucide-react"
-import { Command, commandManager } from "@/lib/commands"
 import { DataManagement } from "@/components/settings/data-management"
 
 interface RightSidebarProps {
@@ -17,7 +15,7 @@ interface RightSidebarProps {
   onToggleSettings: () => void
 }
 
-type SettingsTab = "context" | "model" | "commands" | "data"
+type SettingsTab = "context" | "model" | "data"
 
 export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSettings }: RightSidebarProps) {
   const {
@@ -43,12 +41,6 @@ export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSett
   } = useThreads()
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("context")
-  const [commands, setCommands] = useState<Command[]>([])
-  const [showEditCommandDialog, setShowEditCommandDialog] = useState(false)
-  const [editingCommand, setEditingCommand] = useState<Command | null>(null)
-  const [newCommandName, setNewCommandName] = useState("")
-  const [newCommandPrompt, setNewCommandPrompt] = useState("")
-  const [newCommandDescription, setNewCommandDescription] = useState("")
   const [messageSearch, setMessageSearch] = useState("")
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
@@ -75,13 +67,6 @@ export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSett
     isMessageExplicitlyIncluded,
     contextMessages,
   } = useMessageContext(selectedThreadId)
-
-  // Load commands when component mounts or tab changes
-  useEffect(() => {
-    if (activeTab === "commands") {
-      setCommands(commandManager.getCommands())
-    }
-  }, [activeTab])
 
   const { getRootThread, getAllDescendants, getChildThreads } = useThreadHierarchy()
 
@@ -187,6 +172,7 @@ export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSett
     return null
   }
 
+  // Remove context tab from tab navigation and tab content
   return (
     <div className="flex-shrink-0 bg-background border-l w-[448px]">
       {/* Header */}
@@ -210,16 +196,6 @@ export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSett
       <div className="border-b">
         <div className="flex">
           <Button
-            variant={activeTab === "context" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveTab("context")}
-            className="flex-1 rounded-none text-xs"
-            title="Context Management"
-          >
-            <MessageSquare className="h-3 w-3 mr-1" />
-            Context
-          </Button>
-          <Button
             variant={activeTab === "model" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("model")}
@@ -228,16 +204,6 @@ export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSett
           >
             <Brain className="h-3 w-3 mr-1" />
             Model
-          </Button>
-          <Button
-            variant={activeTab === "commands" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveTab("commands")}
-            className="flex-1 rounded-none text-xs"
-            title="Custom Commands"
-          >
-            <Sliders className="h-3 w-3 mr-1" />
-            Commands
           </Button>
           <Button
             variant={activeTab === "data" ? "default" : "ghost"}
@@ -255,28 +221,7 @@ export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSett
       {/* Tab Content */}
       <div className="p-4">
         <ScrollArea className="h-[calc(100vh-140px)]">
-          {activeTab === "context" ? (
-            <ContextTab
-              currentThread={currentThread}
-              availableThreads={availableThreads}
-              contextMessages={contextMessages}
-              messageSearch={messageSearch}
-              setMessageSearch={setMessageSearch}
-              showSelectedOnly={showSelectedOnly}
-              setShowSelectedOnly={setShowSelectedOnly}
-              expandedItems={expandedItems}
-              setExpandedItems={setExpandedItems}
-              isMessageInContext={isMessageInContext}
-              isMessageExcluded={isMessageExcluded}
-              isMessageExplicitlyIncluded={isMessageExplicitlyIncluded}
-              isThreadInContext={isThreadInContext}
-              getMessageStatus={getMessageStatus}
-              getThreadSelectionState={getThreadSelectionState}
-              handleThreadSelection={handleThreadSelection}
-              handleMessageSelection={handleMessageSelection}
-              toggleAllThreads={toggleAllThreads}
-            />
-          ) : activeTab === "model" ? (
+          {activeTab === "model" ? (
             <ModelTab
               showThinkingMode={showThinkingMode}
               setShowThinkingMode={setShowThinkingMode}
@@ -286,22 +231,6 @@ export function RightSidebar({ showSettingsPanel, selectedThreadId, onToggleSett
               setMaxTokens={setMaxTokens}
               maxContextMessages={maxContextMessages}
               setMaxContextMessages={setMaxContextMessages}
-            />
-          ) : activeTab === "commands" ? (
-            <CommandsTab
-              commands={commands}
-              setCommands={setCommands}
-              showEditCommandDialog={showEditCommandDialog}
-              setShowEditCommandDialog={setShowEditCommandDialog}
-              editingCommand={editingCommand}
-              setEditingCommand={setEditingCommand}
-              newCommandName={newCommandName}
-              setNewCommandName={setNewCommandName}
-              newCommandPrompt={newCommandPrompt}
-              setNewCommandPrompt={setNewCommandPrompt}
-              newCommandDescription={newCommandDescription}
-              setNewCommandDescription={setNewCommandDescription}
-              commandManager={commandManager}
             />
           ) : (
             <DataManagement />

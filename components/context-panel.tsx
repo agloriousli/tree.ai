@@ -1,6 +1,6 @@
 "use client"
 
-import { X, Plus, Trash2, MessageSquare, Eye, AlertTriangle, GripVertical } from "lucide-react"
+import { X, Plus, Trash2, MessageSquare, Eye, AlertTriangle, GripVertical, ChevronRight, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,10 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useThreadHierarchy } from "@/components/hooks/use-thread-hierarchy"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useMessageContext } from "@/components/hooks/use-message-context"
+import { Input } from "@/components/ui/input"
+import { ThreadExplorer } from "@/components/thread-explorer"
 
 interface ContextPanelProps {
   threadId: string
@@ -18,18 +22,31 @@ interface ContextPanelProps {
 }
 
 export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
-  const { threads, addContextThread, removeContextThread, getThreadContext } = useThreads()
+  const { threads, addContextThread, removeContextThread, getThreadContext, addContextMessage, removeContextMessage, excludeMessageFromThread, includeMessageInThread } = useThreads()
   const [selectedThreadToAdd, setSelectedThreadToAdd] = useState<string>("")
   const [showPreview, setShowPreview] = useState(false)
   const [width, setWidth] = useState(384) // Default width (w-96 = 384px)
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<HTMLDivElement>(null)
   const { getParentThread } = useThreadHierarchy()
+  const { isMessageInContext, isMessageExcluded, isMessageExplicitlyIncluded } = useMessageContext(threadId)
+  const [globalMessageSearch, setGlobalMessageSearch] = useState("")
+  const [showCurrentThreadMessages, setShowCurrentThreadMessages] = useState(false)
+  const [showInheritedMessages, setShowInheritedMessages] = useState(false)
+  const [showOptionalMessages, setShowOptionalMessages] = useState(false)
+  const [showAddContextDialog, setShowAddContextDialog] = useState(false)
 
   const currentThread = threads[threadId]
   const availableThreads = Object.values(threads).filter(
     (thread) => thread.id !== threadId && !currentThread?.contextThreadIds.includes(thread.id),
   )
+
+  // Compute inherited and optional threads
+  const inheritedThreads = currentThread.parentThreadId ? [threads[currentThread.parentThreadId]].filter(Boolean) : []
+  const optionalThreads = currentThread.contextThreadIds
+    .filter((id) => id !== currentThread.parentThreadId)
+    .map((id) => threads[id])
+    .filter(Boolean)
 
   const handleAddContext = () => {
     if (selectedThreadToAdd) {
@@ -49,6 +66,32 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
   const contextMessages = getThreadContext(threadId)
   const totalContextMessages = contextMessages.length
   const isContextHeavy = totalContextMessages > 50
+
+  // Helper to handle message selection
+  const handleMessageToggle = (message: any, selected: boolean) => {
+    if (selected) {
+      if (isMessageExcluded(message.id)) {
+        includeMessageInThread(threadId, message.id)
+      } else if (!isMessageInContext(message.id)) {
+        addContextMessage(threadId, message.id)
+      }
+    } else {
+      if (isMessageExplicitlyIncluded(message.id)) {
+        removeContextMessage(threadId, message.id)
+      } else if (isMessageInContext(message.id)) {
+        excludeMessageFromThread(threadId, message.id)
+      }
+    }
+  }
+
+  // Compute all messages for global search
+  const allMessages = Object.values(threads).flatMap(thread => thread.messages.map(msg => ({...msg, threadName: thread.name, threadId: thread.id})))
+  const filteredMessages = globalMessageSearch.trim().length > 0
+    ? allMessages.filter(msg =>
+        msg.content.toLowerCase().includes(globalMessageSearch.toLowerCase()) ||
+        (msg.threadName && msg.threadName.toLowerCase().includes(globalMessageSearch.toLowerCase()))
+      )
+    : []
 
   // Handle mouse down for resizing
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -86,12 +129,18 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
     }
   }, [isResizing])
 
+  const handleAddContextFromExplorer = (selectedThreadId: string) => {
+    if (selectedThreadId && selectedThreadId !== threadId) {
+      addContextThread(threadId, selectedThreadId)
+      setShowAddContextDialog(false)
+    }
+  }
+
   if (!currentThread) return null
 
   return (
     <div 
-      className="border-l bg-background flex flex-col relative"
-      style={{ width: `${width}px`, minWidth: '320px', maxWidth: '600px' }}
+      className="border-l bg-background flex flex-col relative w-full h-full"
     >
       {/* Resize Handle */}
       <div
@@ -112,14 +161,54 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="h-[calc(90vh-120px)] overflow-y-auto">
         <div className="p-4 space-y-4">
-          {/* Current Thread Info */}
+          {/* Global Message Search */}
+          <div>
+            <Input
+              placeholder="Search all messages..."
+              value={globalMessageSearch}
+              onChange={e => setGlobalMessageSearch(e.target.value)}
+              className="mb-2"
+            />
+            {globalMessageSearch.trim().length > 0 && (
+              <div className="max-h-64 overflow-y-auto border rounded p-2 bg-muted/30">
+                {filteredMessages.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No messages found.</div>
+                ) : (
+                  filteredMessages.map(msg => (
+                    <div key={msg.id} className="flex items-center space-x-2 py-1 border-b last:border-b-0">
+                      <Checkbox
+                        checked={isMessageExcluded(msg.id) ? 'indeterminate' : (isMessageInContext(msg.id) ? true : false)}
+                        onCheckedChange={checked => handleMessageToggle(msg, checked === true)}
+                      />
+                      <span className="truncate text-xs flex-1">{msg.content.slice(0, 60)}</span>
+                      <Badge variant="secondary" className="ml-2">{msg.threadName}</Badge>
+                      {isMessageExcluded(msg.id) && <Badge variant="destructive" className="ml-2">Excluded</Badge>}
+                      {isMessageExplicitlyIncluded(msg.id) && <Badge variant="default" className="ml-2">Explicit</Badge>}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Current Thread Info & Messages */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center justify-between">
-                <span className="truncate">Current Thread</span>
-                <Badge variant="secondary" className="flex-shrink-0">{currentThread.messages.length}</Badge>
+                <span className="truncate">This Thread</span>
+                <div className="flex items-center space-x-2">
+                  <Badge variant="secondary" className="flex-shrink-0">{currentThread.messages.length}</Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCurrentThreadMessages(!showCurrentThreadMessages)}
+                    className="h-6 w-6 p-0"
+                  >
+                    {showCurrentThreadMessages ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
@@ -127,31 +216,84 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
                 <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <span className="text-sm font-medium truncate min-w-0 flex-1">{currentThread.name}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Always included in context</p>
+              <p className="text-xs text-muted-foreground mt-1">Always included in context (can exclude individual messages below)</p>
+              
+              {/* Message Summary */}
+              <div className="mt-2 p-3 bg-muted/30 rounded-lg">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Messages Included: </span>
+                  <div className="flex items-center space-x-4 text-xs">
+                    <span className="text-green-600">✓ {currentThread.messages.filter(msg => isMessageInContext(msg.id) && !isMessageExcluded(msg.id)).length} included</span>
+                    <span className="text-red-600">✗ {currentThread.messages.filter(msg => isMessageExcluded(msg.id)).length} excluded</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Expandable Message List */}
+              {showCurrentThreadMessages && (
+                <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
+                  {currentThread.messages.map((msg: any) => (
+                    <div key={msg.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={isMessageExcluded(msg.id) ? 'indeterminate' : (isMessageInContext(msg.id) ? true : false)}
+                        onCheckedChange={(checked) => handleMessageToggle(msg, checked === true)}
+                      />
+                      <span className="truncate text-xs flex-1">{msg.content.slice(0, 60)}</span>
+                      {isMessageExcluded(msg.id) && <Badge variant="destructive" className="ml-2">Excluded</Badge>}
+                      {isMessageExplicitlyIncluded(msg.id) && <Badge variant="default" className="ml-2">Explicit</Badge>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Inherited Context */}
-          {currentThread.parentThreadId && (
+          {/* Inherited Threads */}
+          {inheritedThreads.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center justify-between">
-                  <span className="truncate">Inherited Context</span>
-                  <Badge variant="outline" className="flex-shrink-0">Auto</Badge>
+                  <span>Inherited from Parent</span>
+                  <Badge variant="secondary" className="flex-shrink-0">{inheritedThreads.length}</Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center space-x-2 min-w-0">
-                  <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <span className="text-sm truncate min-w-0 flex-1">{getParentThread(currentThread.id)?.name}</span>
-                  <Badge variant="secondary" className="flex-shrink-0">{getParentThread(currentThread.id)?.messages.length || 0}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Inherited from parent thread</p>
+              <CardContent className="pt-0 space-y-3">
+                {inheritedThreads.map((thread) => (
+                  <div key={thread.id} className="space-y-2">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm font-medium truncate min-w-0 flex-1">{thread.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeContextThread(threadId, thread.id)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Inherited from parent thread (can exclude individual messages)</p>
+                    
+                    <div className="space-y-1">
+                      {thread.messages.map((msg: any) => (
+                        <div key={msg.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            checked={isMessageExcluded(msg.id) ? 'indeterminate' : (isMessageInContext(msg.id) ? true : false)}
+                            onCheckedChange={(checked) => handleMessageToggle(msg, checked === true)}
+                          />
+                          <span className="truncate text-xs flex-1">{msg.content.slice(0, 60)}</span>
+                          {isMessageExcluded(msg.id) && <Badge variant="destructive" className="ml-2">Excluded</Badge>}
+                          {isMessageExplicitlyIncluded(msg.id) && <Badge variant="default" className="ml-2">Explicit</Badge>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
 
-          {/* Optional Context Threads */}
+          {/* Optional Context Threads & Messages */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">Optional Context</CardTitle>
@@ -165,19 +307,15 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
                   if (!contextThread) return null
 
                   return (
-                    <div key={contextThreadId} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg min-w-0">
-                      <div className="flex items-center space-x-2 min-w-0 flex-1">
-                        <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{contextThread.name}</p>
-                          <p className="text-xs text-muted-foreground">{contextThread.messages.length} messages</p>
+                    <div key={contextThreadId} className="mb-2">
+                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg min-w-0">
+                        <div className="flex items-center space-x-2 min-w-0 flex-1">
+                          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{contextThread.name}</p>
+                            <p className="text-xs text-muted-foreground">{contextThread.messages.length} messages</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
-                        <Switch
-                          checked={true}
-                          onCheckedChange={(checked) => handleToggleContext(contextThreadId, checked)}
-                        />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -187,37 +325,51 @@ export function ContextPanel({ threadId, onClose }: ContextPanelProps) {
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
+                      <div className="ml-6 mt-1 space-y-1">
+                        {contextThread.messages.map((msg: any) => (
+                          <div key={msg.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              checked={isMessageExcluded(msg.id) ? 'indeterminate' : (isMessageInContext(msg.id) ? true : false)}
+                              onCheckedChange={(checked) => handleMessageToggle(msg, checked === true)}
+                            />
+                            <span className="truncate text-xs flex-1">{msg.content.slice(0, 60)}</span>
+                            {isMessageExcluded(msg.id) && <Badge variant="destructive" className="ml-2">Excluded</Badge>}
+                            {isMessageExplicitlyIncluded(msg.id) && <Badge variant="default" className="ml-2">Explicit</Badge>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )
                 })}
 
               {/* Add New Context */}
-              <div className="space-y-2">
-                <div className="flex space-x-2 min-w-0">
-                  <Select value={selectedThreadToAdd} onValueChange={setSelectedThreadToAdd}>
-                    <SelectTrigger className="flex-1 min-w-0">
-                      <SelectValue placeholder="Add thread context..." />
-                    </SelectTrigger>
-                    <SelectContent className="max-w-[300px]">
-                      {availableThreads.map((thread) => (
-                        <SelectItem key={thread.id} value={thread.id}>
-                          <div className="flex items-center justify-between w-full min-w-0">
-                            <span className="truncate flex-1">{thread.name}</span>
-                            <Badge variant="secondary" className="ml-2 flex-shrink-0">
-                              {thread.messages.length}
-                            </Badge>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" onClick={handleAddContext} disabled={!selectedThreadToAdd} className="flex-shrink-0">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+              <div className="space-y-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddContextDialog(true)}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Thread Context
+                </Button>
               </div>
             </CardContent>
           </Card>
+
+          {/* Add Context Dialog */}
+          <Dialog open={showAddContextDialog} onOpenChange={setShowAddContextDialog}>
+            <DialogContent className="max-w-4xl max-h-[80vh]">
+              <DialogHeader>
+                <DialogTitle>Add Thread Context</DialogTitle>
+              </DialogHeader>
+              <div className="mt-4">
+                <ThreadExplorer 
+                  onThreadSelect={handleAddContextFromExplorer}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Context Summary */}
           <Card>

@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { MessageBubble } from "@/components/message-bubble"
 import { GettingStartedGuide } from "@/components/getting-started-guide"
 import { Breadcrumbs } from "@/components/breadcrumbs"
-import { Settings, Edit } from "lucide-react"
+import { Settings, Edit, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ContextPanel } from "@/components/context-panel"
 
 interface MessageContainerProps {
   messages: any[]
@@ -15,7 +16,7 @@ interface MessageContainerProps {
   isNearBottom: boolean
   onScroll: (e: React.UIEvent<HTMLDivElement>) => void
   onThreadSelect: (threadId: string) => void
-  onEditThread: () => void
+  onEditThread: (threadId: string) => void
   onToggleSettings: () => void
   showSettingsPanel: boolean
 }
@@ -34,25 +35,7 @@ export function MessageContainer({
   onToggleSettings,
   showSettingsPanel
 }: MessageContainerProps) {
-  // Scroll to bottom when messages change, but only if user is near bottom
-  useEffect(() => {
-    const messagesEndRef = messagesEndRefs.current[activeTabId]
-    if (messagesEndRef && isNearBottom) {
-      messagesEndRef.scrollIntoView({ behavior: "smooth" })
-    }
-  }, [messages, activeTabId, isNearBottom, messagesEndRefs])
-
-  if (!thread) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="text-center">
-          <p className="text-muted-foreground text-lg">Thread not found</p>
-          <p className="text-sm text-muted-foreground mt-2">The selected thread may have been deleted or moved. Please select another thread or create a new thread.</p>
-        </div>
-      </div>
-    )
-  }
-
+  const [showContextPanel, setShowContextPanel] = useState(false)
   return (
     <>
       {/* Breadcrumbs */}
@@ -69,11 +52,11 @@ export function MessageContainer({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onEditThread}
-              className="h-6 w-6 p-0 opacity-60 hover:opacity-100"
-              title="Edit thread"
+              onClick={() => onEditThread(thread.id)}
+              className="h-8 w-8 p-0 hover:bg-muted"
+              title="Edit Thread"
             >
-              <Edit className="h-3 w-3" />
+              <Edit className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
@@ -88,9 +71,33 @@ export function MessageContainer({
             )}
           </div>
         </div>
-
-       
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowContextPanel(true)}
+            className="h-8 px-3 hover:bg-muted"
+            title="Thread Context"
+          >
+            <Layers className="h-4 w-4 mr-2" />
+            Context
+          </Button>
+        </div>
       </div>
+
+      {/* Context Panel Modal */}
+      {showContextPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="fixed inset-0 z-40" onClick={() => setShowContextPanel(false)} />
+          <div 
+            className="bg-background rounded-lg shadow-lg overflow-hidden relative z-50" 
+            style={{ minWidth: 400, maxWidth: '90vw', maxHeight: '90vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ContextPanel threadId={thread.id} onClose={() => setShowContextPanel(false)} />
+          </div>
+        </div>
+      )}
 
       {/* Messages Container */}
       <div

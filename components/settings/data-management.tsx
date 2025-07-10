@@ -96,11 +96,9 @@ export function DataManagement() {
   }
 
   const handleClearData = () => {
-    if (confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
-      clearAllData()
-      setShowClearDialog(false)
-      alert('All data has been cleared.')
-    }
+    clearAllData()
+    setShowClearDialog(false)
+    alert('All data has been cleared.')
   }
 
   return (

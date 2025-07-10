@@ -219,6 +219,10 @@ export function ThreadProvider({ children }: { children: React.ReactNode }) {
             subThreads: [...prev[parentThreadId].subThreads, threadId],
           }
         }
+        // Debug log: print threads after creation
+        setTimeout(() => {
+          console.log('DEBUG: threads after creation', updatedThreads)
+        }, 0)
 
         return updatedThreads
       })

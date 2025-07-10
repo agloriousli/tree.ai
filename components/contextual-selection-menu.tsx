@@ -5,7 +5,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { useThreads } from "@/components/thread-provider"
 import { useThreadCreation } from "@/components/hooks/use-thread-creation"
-import { Command, commandManager } from "@/lib/commands"
 
 interface HighlightMenuState {
   visible: boolean
@@ -16,10 +15,9 @@ interface HighlightMenuState {
 
 interface ContextualSelectionMenuProps {
   onThreadSelect: (threadId: string, options?: { pending?: boolean }) => void
-  onCommandExecute?: (command: Command, text: string) => void
 }
 
-export function ContextualSelectionMenu({ onThreadSelect, onCommandExecute }: ContextualSelectionMenuProps) {
+export function ContextualSelectionMenu({ onThreadSelect }: ContextualSelectionMenuProps) {
   const [menu, setMenu] = useState<HighlightMenuState>({
     visible: false,
     x: 0,
@@ -30,8 +28,6 @@ export function ContextualSelectionMenu({ onThreadSelect, onCommandExecute }: Co
   const { messages } = useThreads()
   const { createThread } = useThreadCreation()
   const [messageId, setMessageId] = useState<string | null>(null)
-  const [showCommands, setShowCommands] = useState(false)
-  const [commands, setCommands] = useState<Command[]>([])
 
   // Hide menu on outside click or Escape
   useEffect(() => {
@@ -92,51 +88,6 @@ export function ContextualSelectionMenu({ onThreadSelect, onCommandExecute }: Co
 
   if (!menu.visible) return null
 
-  const handleShowCommands = () => {
-    setCommands(commandManager.getCommands())
-    setShowCommands(true)
-  }
-
-  const handleCommandExecute = (command: Command) => {
-    if (onCommandExecute) {
-      onCommandExecute(command, menu.text)
-    }
-    setMenu((prev) => ({ ...prev, visible: false }))
-    setShowCommands(false)
-  }
-
-  if (showCommands) {
-    return (
-      <div
-        ref={menuRef}
-        className="fixed z-50 bg-popover border shadow-lg rounded px-3 py-2 text-sm flex flex-col gap-1 animate-fade-in"
-        style={{ top: menu.y, left: menu.x, transform: "translate(-50%, -100%)" }}
-        role="menu"
-        aria-label="Command actions"
-      >
-        <div className="px-2 py-1 text-xs text-muted-foreground border-b mb-1">
-          Commands
-        </div>
-        {commands.map((command) => (
-          <button
-            key={command.id}
-            className="hover:underline px-2 py-1 text-left"
-            onClick={() => handleCommandExecute(command)}
-            aria-label={`Execute ${command.name} command`}
-          >
-            \{command.name}
-          </button>
-        ))}
-        <button
-          className="hover:underline px-2 py-1 text-left text-muted-foreground"
-          onClick={() => setShowCommands(false)}
-        >
-          ← Back
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div
       ref={menuRef}
@@ -194,13 +145,6 @@ export function ContextualSelectionMenu({ onThreadSelect, onCommandExecute }: Co
         aria-label="Create main thread from selection"
       >
         New Main Thread
-      </button>
-      <button
-        className="hover:underline px-2 py-1 text-left"
-        onClick={handleShowCommands}
-        aria-label="Show commands"
-      >
-        Commands
       </button>
     </div>
   )
