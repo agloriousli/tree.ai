@@ -9,7 +9,7 @@ A sophisticated chat application with advanced thread management capabilities, d
 - **Context Management**: Include/exclude messages and threads from context
 - **Thread Visibility**: Control which threads are visible in the interface
 - **Modern UI**: Built with Tailwind CSS and custom components
-- **AI Integration**: Powered by OpenRouter API with multiple model support
+- **AI Integration**: Powered by OpenRouter API with multiple model selections
 
 ## Getting Started
 
